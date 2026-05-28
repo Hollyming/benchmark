@@ -58,7 +58,27 @@ After `python -m ultra_long_benchmark.cli smoke --all`:
 
 All examples remain deterministic and offline-runnable.
 
-## Verification commands
+## Manual grounded pilot flow
+
+The first reference-grounded pilot now uses a small checked-in seed file rather than keeping all seed data in Python:
+
+```text
+examples/manual_grounded_seed/project_manual_001.json
+```
+
+`ultra_long_benchmark.pipelines.grounded_pilot` treats that file as a manual seed adapter and then runs modular stages:
+
+```text
+manual seed adapter
+ -> source artifacts / project profile
+ -> canonical event conversion
+ -> memory graph builder
+ -> probe synthesizer
+ -> project writer
+ -> verifier
+```
+
+This keeps the pilot deterministic and offline while making the future SWE-bench/GitHub/arXiv/OpenReview adapters match the same output contract.
 
 ```bash
 python -m ultra_long_benchmark.cli smoke --all

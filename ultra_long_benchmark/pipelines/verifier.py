@@ -27,7 +27,10 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
     issues: list[str] = []
     artifact_ids = {artifact.artifact_id for artifact in artifacts}
     event_ids = {event.event_id for event in events}
-    memory_ids = {memory.memory_id for memory in graph.memories}
+    claim_ids = {claim for event in events for claim in event.claims}
+    invalidation_targets = event_ids | claim_ids
+    memory_by_id = {memory.memory_id: memory for memory in graph.memories}
+    memory_ids = set(memory_by_id)
 
     if profile.project_id != graph.project_id:
         issues.append("project profile and memory graph project_id mismatch")
@@ -46,6 +49,11 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             issues.append(f"event {event.event_id} references missing artifact {artifact_id}")
         if not event.raw_pointer:
             issues.append(f"event {event.event_id} missing raw_pointer")
+        if event.source_dataset != "synthetic_bridge" and not event.artifacts:
+            issues.append(f"reference-grounded event {event.event_id} has no artifacts")
+        for target in event.invalidates:
+            if target not in invalidation_targets:
+                issues.append(f"event {event.event_id} invalidates unknown target {target}")
 
     for memory in graph.memories:
         missing_events = sorted(set(memory.source_events) - event_ids)
@@ -53,6 +61,8 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             issues.append(f"memory {memory.memory_id} references missing source event {event_id}")
         if memory.status == "active" and not memory.source_events:
             issues.append(f"active memory {memory.memory_id} has no source events")
+        if memory.status != "distractor" and memory.memory_type != "distractor" and not memory.source_events:
+            issues.append(f"non-distractor memory {memory.memory_id} has no source events")
 
     for probe in probes:
         evidence_ids = probe.evidence.positive + probe.evidence.negative + probe.evidence.obsolete + probe.evidence.distractor
@@ -60,13 +70,19 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             issues.append(f"probe {probe.probe_id} has no positive evidence")
         for memory_id in sorted(set(evidence_ids) - memory_ids):
             issues.append(f"probe {probe.probe_id} references missing memory {memory_id}")
+        for memory_id in probe.evidence.negative:
+            memory = memory_by_id.get(memory_id)
+            if memory and memory.memory_type != "negative_evidence" and not memory.negative_evidence:
+                issues.append(f"probe {probe.probe_id} negative evidence {memory_id} is not a negative-evidence memory")
         if not probe.expected_behavior:
             issues.append(f"probe {probe.probe_id} missing expected_behavior")
 
     checks = {
         "schema_validity": True,
-        "provenance_completeness": not any("missing artifact" in issue or "missing raw_pointer" in issue for issue in issues),
+        "provenance_completeness": not any("missing artifact" in issue or "missing raw_pointer" in issue or "has no artifacts" in issue for issue in issues),
+        "invalidation_targets_known": not any("invalidates unknown target" in issue for issue in issues),
         "memory_graph_grounding": not any("source event" in issue or "no source events" in issue for issue in issues),
+        "negative_evidence_links_valid": not any("is not a negative-evidence memory" in issue for issue in issues),
         "evidence_sufficiency": not any("no positive evidence" in issue or "missing memory" in issue for issue in issues),
         "negative_evidence_present": any(probe.evidence.negative for probe in probes),
         "distractor_evidence_present": any(probe.evidence.distractor for probe in probes),

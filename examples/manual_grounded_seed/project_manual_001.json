@@ -1,0 +1,174 @@
+{
+  "project_profile": {
+    "project_id": "project_manual_001",
+    "title": "Manual grounded CompResearchMem pilot",
+    "project_goal": "Build a reference-grounded benchmark for compositional experience memory.",
+    "user_profile": {
+      "research_interest": ["agent memory", "benchmark construction"],
+      "preference": "provenance-first evidence use"
+    },
+    "roles": {
+      "user": "project lead",
+      "Morgan": "annotation QA collaborator",
+      "reviewer": "external paper reviewer",
+      "tool": "experiment/evaluation system"
+    },
+    "phases": ["survey", "experiment", "annotation", "writing"],
+    "source_streams": ["literature_search", "code_experiment", "experiment_audit", "team_feedback"],
+    "synthetic_context": true,
+    "metadata": {"construction": "manual_seed_adapter", "grounded_artifacts": 6}
+  },
+  "artifacts": [
+    {
+      "artifact_id": "artifact_swe_issue_001",
+      "source_dataset": "manual_swe_like",
+      "artifact_type": "github_issue",
+      "uri": "https://example.org/repo/issues/101",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_issue_001",
+      "raw_pointer": "manual_swe_like:issue:101",
+      "content": "Training the 7B baseline with batch size 64 on A100-40G failed with CUDA OOM.",
+      "metadata": {"stream": "code_experiment", "grounding": "manual_reference_seed"}
+    },
+    {
+      "artifact_id": "artifact_ci_log_001",
+      "source_dataset": "manual_swe_like",
+      "artifact_type": "ci_log",
+      "uri": "https://example.org/repo/actions/runs/201",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_ci_001",
+      "raw_pointer": "manual_swe_like:ci:201",
+      "content": "A retry with batch size 16 completed successfully after the OOM failure.",
+      "metadata": {"stream": "code_experiment", "grounding": "manual_reference_seed"}
+    },
+    {
+      "artifact_id": "artifact_eval_audit_001",
+      "source_dataset": "manual_experiment_audit",
+      "artifact_type": "experiment_audit",
+      "uri": "https://example.org/project/eval-audit-v2",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_audit_001",
+      "raw_pointer": "manual_experiment_audit:eval:v2",
+      "content": "The preliminary baseline score used the wrong metric version and must not be cited.",
+      "metadata": {"stream": "experiment_audit", "grounding": "manual_reference_seed"}
+    },
+    {
+      "artifact_id": "artifact_review_001",
+      "source_dataset": "manual_openreview_like",
+      "artifact_type": "review_comment",
+      "uri": "https://example.org/openreview/forum?id=review-7",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_review_001",
+      "raw_pointer": "manual_openreview_like:review:7",
+      "content": "Reviewer requests an ablation table for the benchmark paper.",
+      "metadata": {"stream": "team_feedback", "grounding": "manual_reference_seed"}
+    },
+    {
+      "artifact_id": "artifact_team_001",
+      "source_dataset": "manual_team_dialogue",
+      "artifact_type": "team_message",
+      "uri": "https://example.org/chat/messages/301",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_team_001",
+      "raw_pointer": "manual_team_dialogue:message:301",
+      "content": "Morgan says annotation QA must be frozen before adding new tasks.",
+      "metadata": {"stream": "team_feedback", "grounding": "manual_reference_seed"}
+    },
+    {
+      "artifact_id": "artifact_lit_001",
+      "source_dataset": "manual_literature_notes",
+      "artifact_type": "research_note",
+      "uri": "https://example.org/notes/memory-benchmarks",
+      "license": "synthetic-manual-seed",
+      "content_hash": "manual_sha256_lit_001",
+      "raw_pointer": "manual_literature_notes:note:memory-benchmarks",
+      "content": "The project studies compositional experience memory beyond long-dialogue recall.",
+      "metadata": {"stream": "literature_search", "grounding": "manual_reference_seed"}
+    }
+  ],
+  "event_specs": [
+    {
+      "event_id": "event_001_oom_failure",
+      "timestamp": "2026-03-01T10:00:00+00:00",
+      "source_dataset": "manual_swe_like",
+      "actor": "environment",
+      "event_type": "test_result",
+      "content": "7B baseline with batch size 64 caused CUDA OOM on A100-40G.",
+      "artifacts": ["artifact_swe_issue_001"],
+      "raw_pointer": "manual_swe_like:issue:101",
+      "project_tags": ["agent_memory", "experiment"],
+      "entities": ["7B baseline", "A100-40G", "batch size 64", "CUDA OOM"],
+      "claims": ["claim_batch64_oom"],
+      "validity": {"scope": "7B baseline on A100-40G", "start": "event_001_oom_failure", "status": "active"}
+    },
+    {
+      "event_id": "event_002_batch16_validated",
+      "timestamp": "2026-03-02T11:30:00+00:00",
+      "source_dataset": "manual_swe_like",
+      "actor": "tool",
+      "event_type": "test_result",
+      "content": "Batch size 16 completed successfully on the same setup.",
+      "artifacts": ["artifact_ci_log_001"],
+      "raw_pointer": "manual_swe_like:ci:201",
+      "project_tags": ["agent_memory", "experiment"],
+      "entities": ["7B baseline", "A100-40G", "batch size 16"],
+      "claims": ["claim_batch16_valid"],
+      "causal_links": ["event_001_oom_failure"],
+      "validity": {"scope": "7B baseline on A100-40G", "start": "event_002_batch16_validated", "status": "active"}
+    },
+    {
+      "event_id": "event_003_metric_invalidated",
+      "timestamp": "2026-03-04T09:00:00+00:00",
+      "source_dataset": "manual_experiment_audit",
+      "actor": "tool",
+      "event_type": "negative_evidence",
+      "content": "Preliminary baseline score used the wrong metric version and must not be cited.",
+      "artifacts": ["artifact_eval_audit_001"],
+      "raw_pointer": "manual_experiment_audit:eval:v2",
+      "project_tags": ["agent_memory", "evaluation"],
+      "entities": ["baseline score", "metric version"],
+      "claims": ["claim_preliminary_score"],
+      "invalidates": ["claim_preliminary_score"],
+      "validity": {"scope": "benchmark evaluation claims", "start": "event_003_metric_invalidated", "status": "active"}
+    },
+    {
+      "event_id": "event_004_reviewer_ablation",
+      "timestamp": "2026-03-06T15:00:00+00:00",
+      "source_dataset": "manual_openreview_like",
+      "actor": "reviewer",
+      "event_type": "feedback",
+      "content": "Reviewer requests an ablation table for the benchmark paper.",
+      "artifacts": ["artifact_review_001"],
+      "raw_pointer": "manual_openreview_like:review:7",
+      "project_tags": ["agent_memory", "writing"],
+      "entities": ["reviewer", "ablation table"],
+      "claims": ["claim_ablation_requested"]
+    },
+    {
+      "event_id": "event_005_morgan_qa_freeze",
+      "timestamp": "2026-03-06T16:00:00+00:00",
+      "source_dataset": "manual_team_dialogue",
+      "actor": "collaborator",
+      "event_type": "team_constraint",
+      "content": "Morgan says annotation QA must be frozen before adding new tasks.",
+      "artifacts": ["artifact_team_001"],
+      "raw_pointer": "manual_team_dialogue:message:301",
+      "project_tags": ["agent_memory", "annotation"],
+      "entities": ["Morgan", "annotation QA", "new tasks"],
+      "claims": ["claim_qa_freeze_first"]
+    },
+    {
+      "event_id": "event_006_research_direction",
+      "timestamp": "2026-03-08T12:00:00+00:00",
+      "source_dataset": "manual_literature_notes",
+      "actor": "user",
+      "event_type": "research_note",
+      "content": "The project studies compositional experience memory beyond long-dialogue recall.",
+      "artifacts": ["artifact_lit_001"],
+      "raw_pointer": "manual_literature_notes:note:memory-benchmarks",
+      "project_tags": ["agent_memory", "benchmark_design"],
+      "entities": ["compositional experience memory", "long-dialogue recall"],
+      "claims": ["claim_beyond_recall"]
+    }
+  ]
+}
