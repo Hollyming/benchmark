@@ -1,0 +1,7 @@
+input_timelines: examples/generated/persona_life_event_simulation/personas.jsonl
+output_trajectories: examples/generated/multi_session_agent_trajectory_generation/trajectories.jsonl
+llm_provider: offline
+notes:
+  - "Set ULB_LLM_PROVIDER and provider API keys only for non-smoke generation."
+  - "The offline client is deterministic and suitable for tests."
+

@@ -1,0 +1,29 @@
+- id: "memorybench_seed_001"
+  title: "Long-horizon agent memory evaluation seed"
+  year: 2024
+  venue: "placeholder"
+  url: "https://example.org/replace-with-public-paper"
+  capabilities:
+    - episodic_recall
+    - temporal_reasoning
+    - provenance_use
+  notes: "Placeholder seed for maintaining a literature map; replace with reviewed paper metadata."
+- id: "personalization_seed_001"
+  title: "Personalization and preference drift seed"
+  year: 2023
+  venue: "placeholder"
+  url: "https://example.org/replace-with-public-paper"
+  capabilities:
+    - preference_learning
+    - conflict_resolution
+  notes: "Use this slot for work on longitudinal personalization."
+- id: "privacy_seed_001"
+  title: "Privacy-aware memory systems seed"
+  year: 2024
+  venue: "placeholder"
+  url: "https://example.org/replace-with-public-paper"
+  capabilities:
+    - privacy_refusal
+    - abstention
+  notes: "Use this slot for work on privacy and safety constraints in memory."
+

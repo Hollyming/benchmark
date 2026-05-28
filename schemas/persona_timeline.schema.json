@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PersonaTimeline",
+  "type": "object",
+  "required": ["persona_id", "display_name", "baseline_profile", "events"],
+  "properties": {
+    "persona_id": {"type": "string"},
+    "display_name": {"type": "string"},
+    "baseline_profile": {"type": "object"},
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_id", "persona_id", "timestamp", "event_type", "summary"],
+        "properties": {
+          "event_id": {"type": "string"},
+          "persona_id": {"type": "string"},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "event_type": {"type": "string"},
+          "summary": {"type": "string"},
+          "details": {"type": "object"},
+          "capabilities": {"type": "array", "items": {"type": "string"}},
+          "provenance": {"type": "array", "items": {"$ref": "provenance.schema.json"}},
+          "privacy_tags": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}
+

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceDocument",
+  "type": "object",
+  "required": ["doc_id", "title", "text", "created_at", "provenance"],
+  "properties": {
+    "doc_id": {"type": "string"},
+    "title": {"type": "string"},
+    "text": {"type": "string"},
+    "created_at": {"type": "string", "format": "date"},
+    "provenance": {"$ref": "provenance.schema.json"},
+    "metadata": {"type": "object"}
+  }
+}
+

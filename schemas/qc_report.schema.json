@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QCReport",
+  "type": "object",
+  "required": ["task", "generated_at", "counts", "issues", "passed"],
+  "properties": {
+    "task": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "counts": {"type": "object"},
+    "issues": {"type": "array", "items": {"type": "string"}},
+    "passed": {"type": "boolean"}
+  }
+}
+

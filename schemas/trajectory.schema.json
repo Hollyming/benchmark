@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trajectory",
+  "type": "object",
+  "required": ["trajectory_id", "persona_id", "sessions"],
+  "properties": {
+    "trajectory_id": {"type": "string"},
+    "persona_id": {"type": "string"},
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["session_id", "persona_id", "start_time", "messages"],
+        "properties": {
+          "session_id": {"type": "string"},
+          "persona_id": {"type": "string"},
+          "start_time": {"type": "string", "format": "date-time"},
+          "linked_event_ids": {"type": "array", "items": {"type": "string"}},
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["message_id", "role", "timestamp", "content"],
+              "properties": {
+                "message_id": {"type": "string"},
+                "role": {"type": "string"},
+                "timestamp": {"type": "string", "format": "date-time"},
+                "content": {"type": "string"},
+                "provenance": {"type": "array", "items": {"$ref": "provenance.schema.json"}},
+                "privacy_tags": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {"type": "object"}
+  }
+}
+

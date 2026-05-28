@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ultra-long-benchmark"
+version = "0.1.0"
+description = "Offline-first ultra-long trajectory benchmark construction workspace."
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic>=1.10",
+  "PyYAML>=6.0",
+  "jsonschema>=4.0"
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+ulb = "ultra_long_benchmark.cli:main"
+

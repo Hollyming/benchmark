@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Provenance",
+  "type": "object",
+  "required": ["source_id", "origin"],
+  "properties": {
+    "source_id": {"type": "string"},
+    "origin": {"type": "string"},
+    "uri": {"type": ["string", "null"]},
+    "license": {"type": ["string", "null"]},
+    "content_hash": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}
+
