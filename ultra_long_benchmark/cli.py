@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ultra_long_benchmark.audit import audit_generated, format_audit_text
 from ultra_long_benchmark.pipelines.evaluation import run_baseline_evaluation
+from ultra_long_benchmark.pipelines.grounded_pilot import run_manual_grounded_pilot
 from ultra_long_benchmark.pipelines.ingestion import ingest_seed_documents
 from ultra_long_benchmark.pipelines.literature import build_literature_map
 from ultra_long_benchmark.pipelines.persona import simulate_personas
@@ -13,6 +14,7 @@ from ultra_long_benchmark.pipelines.query import generate_queries
 from ultra_long_benchmark.pipelines.release import package_release
 from ultra_long_benchmark.pipelines.stress import compute_stress_profiles
 from ultra_long_benchmark.pipelines.trajectory import generate_trajectories
+from ultra_long_benchmark.pipelines.verifier import run_project_verifier
 from ultra_long_benchmark.shared.io import write_json
 
 
@@ -33,6 +35,11 @@ def main() -> None:
     sub.add_parser("evaluate")
     sub.add_parser("release")
     sub.add_parser("stress")
+    grounded = sub.add_parser("grounded-pilot")
+    grounded.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
+    verify = sub.add_parser("verify-project")
+    verify.add_argument("project_dir", type=Path, help="Project directory containing artifacts/events/memory_graph/probes.")
+    verify.add_argument("--output", type=Path, help="Optional verifier report output path.")
     audit = sub.add_parser("audit")
     audit.add_argument("--generated-dir", type=Path, default=GENERATED, help="Generated artifact directory to audit.")
     audit.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
@@ -80,6 +87,17 @@ def main() -> None:
             GENERATED / "evaluation_harness" / "stress_profile.json",
         )
         print(f"stress profiles written: trajectories={report['summary']['trajectories']} max_horizon_days={report['summary']['max_horizon_days']}")
+    elif args.command == "grounded-pilot":
+        summary = run_manual_grounded_pilot(args.output_dir)
+        report = run_project_verifier(Path(summary["project_dir"]))
+        print(f"grounded pilot written: project={summary['project_id']} probes={summary['probes']} verifier_passed={report.passed}")
+        if not report.passed:
+            raise SystemExit(f"grounded pilot verifier failed: {report.issues}")
+    elif args.command == "verify-project":
+        report = run_project_verifier(args.project_dir, args.output)
+        print(f"verified project={report.project_id} passed={report.passed} issues={len(report.issues)}")
+        if not report.passed:
+            raise SystemExit(1)
     elif args.command == "validate":
         validate_generated()
     elif args.command == "audit":

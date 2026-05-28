@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CanonicalEvent",
+  "type": "object",
+  "required": ["event_id", "project_id", "timestamp", "source_dataset", "actor", "event_type", "content"],
+  "properties": {
+    "event_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "source_dataset": {"type": "string"},
+    "actor": {"type": "string"},
+    "event_type": {"type": "string"},
+    "content": {"type": "string"},
+    "artifacts": {"type": "array", "items": {"type": "string"}},
+    "raw_pointer": {"type": "string"},
+    "project_tags": {"type": "array", "items": {"type": "string"}},
+    "entities": {"type": "array", "items": {"type": "string"}},
+    "claims": {"type": "array", "items": {"type": "string"}},
+    "causal_links": {"type": "array", "items": {"type": "string"}},
+    "supersedes": {"type": "array", "items": {"type": "string"}},
+    "invalidates": {"type": "array", "items": {"type": "string"}},
+    "validity": {"type": ["object", "null"]},
+    "metadata": {"type": "object"}
+  }
+}

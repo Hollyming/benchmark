@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MemoryGraph",
+  "type": "object",
+  "required": ["project_id", "memories"],
+  "properties": {
+    "project_id": {"type": "string"},
+    "memories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["memory_id", "project_id", "memory_type", "content"],
+        "properties": {
+          "memory_id": {"type": "string"},
+          "project_id": {"type": "string"},
+          "memory_type": {"type": "string"},
+          "content": {"type": "string"},
+          "source_events": {"type": "array", "items": {"type": "string"}},
+          "status": {"type": "string"},
+          "validity": {"type": ["object", "null"]},
+          "relations": {"type": "array", "items": {"type": "object"}},
+          "negative_evidence": {"type": "array", "items": {"type": "string"}},
+          "distractors": {"type": "array", "items": {"type": "string"}},
+          "future_utility": {"type": ["object", "null"]},
+          "metadata": {"type": "object"}
+        }
+      }
+    },
+    "metadata": {"type": "object"}
+  }
+}

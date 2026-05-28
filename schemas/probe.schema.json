@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Probe",
+  "type": "object",
+  "required": ["probe_id", "project_id", "trajectory_id", "task_type", "query", "expected_behavior"],
+  "properties": {
+    "probe_id": {"type": "string"},
+    "project_id": {"type": "string"},
+    "trajectory_id": {"type": "string"},
+    "task_type": {"type": "string"},
+    "query": {"type": "string"},
+    "expected_behavior": {"type": "object"},
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "positive": {"type": "array", "items": {"type": "string"}},
+        "negative": {"type": "array", "items": {"type": "string"}},
+        "obsolete": {"type": "array", "items": {"type": "string"}},
+        "distractor": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "capabilities": {"type": "array", "items": {"type": "string"}},
+    "evaluation": {"type": "object"},
+    "difficulty": {"type": "string"},
+    "metadata": {"type": "object"}
+  }
+}

@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from ultra_long_benchmark.models import (
+    CanonicalEvent,
+    MemoryGraph,
+    Probe,
+    ProjectProfile,
+    SourceArtifact,
+    VerifierReport,
+    model_validate,
+)
+from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_json
+
+
+def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> VerifierReport:
+    project_dir = Path(project_dir)
+    profile = model_validate(ProjectProfile, read_json(project_dir / "project_profile.json"))
+    artifacts = [model_validate(SourceArtifact, row) for row in read_jsonl(project_dir / "artifacts.jsonl")]
+    events = [model_validate(CanonicalEvent, row) for row in read_jsonl(project_dir / "events.jsonl")]
+    graph = model_validate(MemoryGraph, read_json(project_dir / "memory_graph.json"))
+    probes = [model_validate(Probe, row) for row in read_jsonl(project_dir / "probes.jsonl")]
+
+    issues: list[str] = []
+    artifact_ids = {artifact.artifact_id for artifact in artifacts}
+    event_ids = {event.event_id for event in events}
+    memory_ids = {memory.memory_id for memory in graph.memories}
+
+    if profile.project_id != graph.project_id:
+        issues.append("project profile and memory graph project_id mismatch")
+    if not artifacts:
+        issues.append("no source artifacts found")
+    if not events:
+        issues.append("no canonical events found")
+    if not graph.memories:
+        issues.append("no memory graph nodes found")
+    if not probes:
+        issues.append("no probes found")
+
+    for event in events:
+        missing_artifacts = sorted(set(event.artifacts) - artifact_ids)
+        for artifact_id in missing_artifacts:
+            issues.append(f"event {event.event_id} references missing artifact {artifact_id}")
+        if not event.raw_pointer:
+            issues.append(f"event {event.event_id} missing raw_pointer")
+
+    for memory in graph.memories:
+        missing_events = sorted(set(memory.source_events) - event_ids)
+        for event_id in missing_events:
+            issues.append(f"memory {memory.memory_id} references missing source event {event_id}")
+        if memory.status == "active" and not memory.source_events:
+            issues.append(f"active memory {memory.memory_id} has no source events")
+
+    for probe in probes:
+        evidence_ids = probe.evidence.positive + probe.evidence.negative + probe.evidence.obsolete + probe.evidence.distractor
+        if not probe.evidence.positive:
+            issues.append(f"probe {probe.probe_id} has no positive evidence")
+        for memory_id in sorted(set(evidence_ids) - memory_ids):
+            issues.append(f"probe {probe.probe_id} references missing memory {memory_id}")
+        if not probe.expected_behavior:
+            issues.append(f"probe {probe.probe_id} missing expected_behavior")
+
+    checks = {
+        "schema_validity": True,
+        "provenance_completeness": not any("missing artifact" in issue or "missing raw_pointer" in issue for issue in issues),
+        "memory_graph_grounding": not any("source event" in issue or "no source events" in issue for issue in issues),
+        "evidence_sufficiency": not any("no positive evidence" in issue or "missing memory" in issue for issue in issues),
+        "negative_evidence_present": any(probe.evidence.negative for probe in probes),
+        "distractor_evidence_present": any(probe.evidence.distractor for probe in probes),
+        "multi_task_coverage": len({probe.task_type for probe in probes}) >= 3,
+    }
+    if not checks["negative_evidence_present"]:
+        issues.append("no probe contains negative evidence")
+    if not checks["distractor_evidence_present"]:
+        issues.append("no probe contains distractor evidence")
+    if not checks["multi_task_coverage"]:
+        issues.append("fewer than three probe task types")
+
+    report = VerifierReport(
+        project_id=profile.project_id,
+        generated_at=datetime.now(timezone.utc),
+        checks=checks,
+        counts={
+            "artifacts": len(artifacts),
+            "events": len(events),
+            "memories": len(graph.memories),
+            "probes": len(probes),
+            "probe_task_types": len({probe.task_type for probe in probes}),
+        },
+        issues=issues,
+        passed=not issues and all(checks.values()),
+    )
+    if output_path is None:
+        output_path = project_dir / "verifier_report.json"
+    write_json(output_path, report)
+    return report
+
+
+def verify_grounded_projects(projects_dir: Path) -> dict[str, Any]:
+    reports = []
+    for project_dir in sorted(path for path in Path(projects_dir).iterdir() if path.is_dir()):
+        reports.append(run_project_verifier(project_dir))
+    return {
+        "projects": len(reports),
+        "passed": all(report.passed for report in reports),
+        "reports": [report.model_dump(mode="json") if hasattr(report, "model_dump") else report.dict() for report in reports],
+    }

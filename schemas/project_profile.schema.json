@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectProfile",
+  "type": "object",
+  "required": ["project_id", "title", "project_goal"],
+  "properties": {
+    "project_id": {"type": "string"},
+    "title": {"type": "string"},
+    "project_goal": {"type": "string"},
+    "user_profile": {"type": "object"},
+    "roles": {"type": "object"},
+    "phases": {"type": "array", "items": {"type": "string"}},
+    "source_streams": {"type": "array", "items": {"type": "string"}},
+    "synthetic_context": {"type": "boolean"},
+    "metadata": {"type": "object"}
+  }
+}

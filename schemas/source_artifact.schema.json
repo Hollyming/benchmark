@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceArtifact",
+  "type": "object",
+  "required": ["artifact_id", "source_dataset", "artifact_type", "raw_pointer"],
+  "properties": {
+    "artifact_id": {"type": "string"},
+    "source_dataset": {"type": "string"},
+    "artifact_type": {"type": "string"},
+    "uri": {"type": ["string", "null"]},
+    "license": {"type": ["string", "null"]},
+    "content_hash": {"type": ["string", "null"]},
+    "raw_pointer": {"type": "string"},
+    "content": {"type": "string"},
+    "metadata": {"type": "object"}
+  }
+}

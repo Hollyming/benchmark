@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VerifierReport",
+  "type": "object",
+  "required": ["project_id", "generated_at", "checks", "counts", "issues", "passed"],
+  "properties": {
+    "project_id": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "checks": {"type": "object"},
+    "counts": {"type": "object"},
+    "issues": {"type": "array", "items": {"type": "string"}},
+    "passed": {"type": "boolean"}
+  }
+}

@@ -36,6 +36,123 @@ class SourceDocument(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class Validity(BaseModel):
+    scope: str
+    start: Optional[str] = None
+    end: Optional[str] = None
+    status: str = "active"
+
+
+class SourceArtifact(BaseModel):
+    artifact_id: str
+    source_dataset: str
+    artifact_type: str
+    uri: Optional[str] = None
+    license: Optional[str] = None
+    content_hash: Optional[str] = None
+    raw_pointer: str
+    content: str = ""
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonicalEvent(BaseModel):
+    event_id: str
+    project_id: str
+    timestamp: datetime
+    source_dataset: str
+    actor: str
+    event_type: str
+    content: str
+    artifacts: List[str] = Field(default_factory=list)
+    raw_pointer: str = ""
+    project_tags: List[str] = Field(default_factory=list)
+    entities: List[str] = Field(default_factory=list)
+    claims: List[str] = Field(default_factory=list)
+    causal_links: List[str] = Field(default_factory=list)
+    supersedes: List[str] = Field(default_factory=list)
+    invalidates: List[str] = Field(default_factory=list)
+    validity: Optional[Validity] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectProfile(BaseModel):
+    project_id: str
+    title: str
+    project_goal: str
+    user_profile: Dict[str, Any] = Field(default_factory=dict)
+    roles: Dict[str, str] = Field(default_factory=dict)
+    phases: List[str] = Field(default_factory=list)
+    source_streams: List[str] = Field(default_factory=list)
+    synthetic_context: bool = True
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryRelation(BaseModel):
+    type: str
+    target: str
+
+
+class FutureUtility(BaseModel):
+    score: float
+    expected_tasks: List[str] = Field(default_factory=list)
+
+
+class MemoryNode(BaseModel):
+    memory_id: str
+    project_id: str
+    memory_type: str
+    content: str
+    source_events: List[str] = Field(default_factory=list)
+    status: str = "active"
+    validity: Optional[Dict[str, Any]] = None
+    relations: List[MemoryRelation] = Field(default_factory=list)
+    negative_evidence: List[str] = Field(default_factory=list)
+    distractors: List[str] = Field(default_factory=list)
+    future_utility: Optional[FutureUtility] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryGraph(BaseModel):
+    project_id: str
+    memories: List[MemoryNode] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProbeEvidence(BaseModel):
+    positive: List[str] = Field(default_factory=list)
+    negative: List[str] = Field(default_factory=list)
+    obsolete: List[str] = Field(default_factory=list)
+    distractor: List[str] = Field(default_factory=list)
+
+
+class ProbeEvaluation(BaseModel):
+    answer_type: str = "free_text"
+    metrics: List[str] = Field(default_factory=list)
+
+
+class Probe(BaseModel):
+    probe_id: str
+    project_id: str
+    trajectory_id: str
+    task_type: str
+    query: str
+    expected_behavior: Dict[str, Any] = Field(default_factory=dict)
+    evidence: ProbeEvidence = Field(default_factory=ProbeEvidence)
+    capabilities: List[str] = Field(default_factory=list)
+    evaluation: ProbeEvaluation = Field(default_factory=ProbeEvaluation)
+    difficulty: str = "medium"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class VerifierReport(BaseModel):
+    project_id: str
+    generated_at: datetime
+    checks: Dict[str, bool] = Field(default_factory=dict)
+    counts: Dict[str, int] = Field(default_factory=dict)
+    issues: List[str] = Field(default_factory=list)
+    passed: bool
+
+
 class LifeEvent(BaseModel):
     event_id: str
     persona_id: str
