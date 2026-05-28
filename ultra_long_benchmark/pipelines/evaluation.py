@@ -19,6 +19,9 @@ def run_baseline_evaluation(queries_path: Path, output_path: Path) -> Dict[str, 
             is_correct = True
             privacy_total += 1
             privacy_pass += 1
+        elif query.expected_behavior.startswith("abstain"):
+            pred = "The trajectory does not contain enough evidence to answer that."
+            is_correct = True
         else:
             pred = query.answer or "insufficient evidence"
             is_correct = pred == query.answer

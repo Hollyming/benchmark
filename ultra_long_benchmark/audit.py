@@ -102,6 +102,9 @@ def _count_artifacts(rows_by_artifact: dict[str, list[dict[str, Any]]]) -> dict[
     sessions = [session for trajectory in trajectories for session in trajectory.get("sessions", [])]
     messages = [message for session in sessions for message in session.get("messages", [])]
     capability_counts = Counter(query.get("capability", "missing") for query in queries)
+    memory_task_counts = Counter(query.get("memory_task", "missing") for query in queries)
+    complexity_counts = Counter(feature for trajectory in trajectories for feature in trajectory.get("metadata", {}).get("complexity_features", []))
+    experience_component_counts = Counter(feature for trajectory in trajectories for feature in trajectory.get("metadata", {}).get("experience_memory_components", []))
 
     return {
         "source_documents": len(rows_by_artifact["source_documents"]),
@@ -112,7 +115,13 @@ def _count_artifacts(rows_by_artifact: dict[str, list[dict[str, Any]]]) -> dict[
         "messages": len(messages),
         "queries": len(queries),
         "privacy_sensitive_queries": sum(1 for query in queries if query.get("privacy_sensitive")),
+        "queries_with_negative_evidence": sum(1 for query in queries if query.get("negative_evidence_event_ids")),
+        "queries_with_obsolete_evidence": sum(1 for query in queries if query.get("obsolete_evidence_event_ids")),
+        "queries_with_distractors": sum(1 for query in queries if query.get("distractor_event_ids")),
         "capabilities": dict(sorted(capability_counts.items())),
+        "memory_tasks": dict(sorted(memory_task_counts.items())),
+        "trajectory_complexity_features": dict(sorted(complexity_counts.items())),
+        "experience_memory_components": dict(sorted(experience_component_counts.items())),
     }
 
 

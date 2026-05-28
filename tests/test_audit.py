@@ -13,13 +13,23 @@ def test_audit_reports_counts_schema_and_qc_for_smoke_artifacts():
     assert report["passed"] is True
     assert report["counts"]["source_documents"] == 2
     assert report["counts"]["personas"] == 2
-    assert report["counts"]["events"] == 12
+    assert report["counts"]["events"] == 18
     assert report["counts"]["trajectories"] == 2
-    assert report["counts"]["sessions"] == 12
-    assert report["counts"]["messages"] == 24
-    assert report["counts"]["queries"] == 8
+    assert report["counts"]["sessions"] == 22
+    assert report["counts"]["messages"] == 54
+    assert report["counts"]["queries"] == 24
     assert report["counts"]["privacy_sensitive_queries"] == 2
     assert report["counts"]["capabilities"]["privacy_refusal"] == 2
+    assert report["counts"]["capabilities"]["preference_learning"] == 2
+    assert report["counts"]["capabilities"]["semantic_consolidation"] == 2
+    assert report["counts"]["capabilities"]["provenance_use"] == 4
+    assert report["counts"]["capabilities"]["long_horizon_planning"] == 4
+    assert report["counts"]["capabilities"]["abstention"] == 2
+    assert report["counts"]["queries_with_negative_evidence"] == 6
+    assert report["counts"]["queries_with_obsolete_evidence"] == 6
+    assert report["counts"]["memory_tasks"]["failure_aware_experiment_planning"] == 2
+    assert report["counts"]["memory_tasks"]["obsolete_negative_evidence_suppression"] == 2
+    assert report["counts"]["experience_memory_components"]["versioned_belief_state"] == 2
     assert all(status["valid"] for status in report["schema"].values())
     assert report["qc"]["present"] is True
     assert report["qc"]["passed"] is True

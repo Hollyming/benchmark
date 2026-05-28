@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
-from ultra_long_benchmark.models import MemoryChallengeQuery, PersonaTimeline, QCReport, Trajectory, model_validate
+from ultra_long_benchmark.models import Capability, MemoryChallengeQuery, PersonaTimeline, QCReport, Trajectory, model_validate
 from ultra_long_benchmark.shared.io import read_jsonl, write_json, write_text
 from ultra_long_benchmark.validation import require_unique
 
@@ -14,7 +14,16 @@ def run_quality_control(timelines_path: Path, trajectories_path: Path, queries_p
     trajectories = [model_validate(Trajectory, row) for row in read_jsonl(trajectories_path)]
     queries = [model_validate(MemoryChallengeQuery, row) for row in read_jsonl(queries_path)]
     event_ids = [event.event_id for timeline in timelines for event in timeline.events]
-    query_event_ids = [event_id for query in queries for event_id in query.evidence_event_ids]
+    query_event_ids = [
+        event_id
+        for query in queries
+        for event_id in (
+            query.evidence_event_ids
+            + query.negative_evidence_event_ids
+            + query.obsolete_evidence_event_ids
+            + query.distractor_event_ids
+        )
+    ]
     issues: List[str] = []
     issues.extend(require_unique(event_ids, "event_id"))
     issues.extend(require_unique([q.query_id for q in queries], "query_id"))
@@ -22,6 +31,51 @@ def run_quality_control(timelines_path: Path, trajectories_path: Path, queries_p
     issues.extend([f"query evidence references missing event: {event_id}" for event_id in missing])
     if not any(query.privacy_sensitive for query in queries):
         issues.append("no privacy-sensitive challenge queries found")
+    expected_capabilities = {capability.value for capability in Capability}
+    observed_capabilities = {query.capability.value if hasattr(query.capability, "value") else str(query.capability) for query in queries}
+    missing_capabilities = sorted(expected_capabilities - observed_capabilities)
+    issues.extend([f"capability has no challenge query: {capability}" for capability in missing_capabilities])
+    if not any(query.expected_behavior.startswith("abstain") for query in queries):
+        issues.append("no abstention challenge queries found")
+    if not any(len(session.linked_event_ids) == 0 for trajectory in trajectories for session in trajectory.sessions):
+        issues.append("no distractor sessions found")
+    if not any(len(session.linked_event_ids) > 1 for trajectory in trajectories for session in trajectory.sessions):
+        issues.append("no multi-event sessions found")
+    complexity_features = {
+        feature
+        for trajectory in trajectories
+        for feature in trajectory.metadata.get("complexity_features", [])
+    }
+    for required_feature in [
+        "distractor_sessions",
+        "multi_event_sessions",
+        "delayed_callbacks",
+        "topic_switching",
+        "contradictory_updates",
+        "negative_evidence",
+        "procedural_failure_lessons",
+        "multi_role_constraints",
+    ]:
+        if required_feature not in complexity_features:
+            issues.append(f"missing trajectory complexity feature: {required_feature}")
+    required_tasks = {
+        "research_thread_resumption",
+        "failure_aware_experiment_planning",
+        "versioned_claim_tracking",
+        "provenance_constrained_writing",
+        "cross_source_evidence_composition",
+        "task_conditioned_personalized_storage",
+        "multi_role_constraint_resolution",
+        "obsolete_negative_evidence_suppression",
+        "long_horizon_aggregated_reasoning",
+    }
+    observed_tasks = {query.memory_task for query in queries}
+    for missing_task in sorted(required_tasks - observed_tasks):
+        issues.append(f"memory task has no challenge query: {missing_task}")
+    if not any(query.negative_evidence_event_ids for query in queries):
+        issues.append("no query includes negative evidence")
+    if not any(query.obsolete_evidence_event_ids for query in queries):
+        issues.append("no query includes obsolete evidence")
     report = QCReport(
         task="annotation_and_quality_control",
         generated_at=datetime.now(timezone.utc),

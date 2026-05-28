@@ -21,14 +21,18 @@ class StressProfile:
     query_count: int
     capability_counts: dict[str, int]
     evidence_hop_histogram: dict[str, int]
+    trajectory_stressors: dict[str, int]
+    complexity_features: list[str]
+    experience_memory_components: list[str]
 
 
 def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queries_path: Path, output_path: Path) -> dict[str, Any]:
     """Compute long-horizon stress statistics for benchmark reporting.
 
     This is intentionally lightweight and offline: it verifies that generated data
-    has measurable temporal span, cross-session structure, capability balance, and
-    evidence-hop diversity. Large paper-scale releases can reuse the same contract.
+    has measurable temporal span, cross-session structure, capability balance,
+    evidence-hop diversity, and trajectory-level nuisance factors. Large
+    paper-scale releases can reuse the same contract.
     """
     timelines = [model_validate(PersonaTimeline, row) for row in read_jsonl(timelines_path)]
     trajectories = [model_validate(Trajectory, row) for row in read_jsonl(trajectories_path)]
@@ -42,6 +46,10 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
     profiles: list[StressProfile] = []
     global_capabilities: Counter[str] = Counter()
     global_hops: Counter[str] = Counter()
+    global_stressors: Counter[str] = Counter()
+    global_complexity_features: Counter[str] = Counter()
+    global_experience_components: Counter[str] = Counter()
+    global_memory_tasks: Counter[str] = Counter()
     for trajectory in trajectories:
         timeline = timeline_by_persona[trajectory.persona_id]
         events = sorted(timeline.events, key=lambda event: event.timestamp)
@@ -54,11 +62,18 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
         event_index = {event.event_id: index for index, event in enumerate(events)}
         for query in queries_by_trajectory[trajectory.trajectory_id]:
             capability_counts[query.capability.value if isinstance(query.capability, Capability) else str(query.capability)] += 1
+            global_memory_tasks.update([query.memory_task])
             hops = [len(events) - 1 - event_index[event_id] for event_id in query.evidence_event_ids if event_id in event_index]
             bucket = _hop_bucket(max(hops) if hops else 0)
             hop_counts[bucket] += 1
+        stressors = _trajectory_stressors(trajectory)
+        complexity_features = sorted(str(feature) for feature in trajectory.metadata.get("complexity_features", []))
+        experience_components = sorted(str(feature) for feature in trajectory.metadata.get("experience_memory_components", []))
         global_capabilities.update(capability_counts)
         global_hops.update(hop_counts)
+        global_stressors.update(stressors)
+        global_complexity_features.update(complexity_features)
+        global_experience_components.update(experience_components)
         profiles.append(
             StressProfile(
                 trajectory_id=trajectory.trajectory_id,
@@ -70,6 +85,9 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
                 query_count=len(queries_by_trajectory[trajectory.trajectory_id]),
                 capability_counts=dict(sorted(capability_counts.items())),
                 evidence_hop_histogram=dict(sorted(hop_counts.items())),
+                trajectory_stressors=dict(sorted(stressors.items())),
+                complexity_features=complexity_features,
+                experience_memory_components=experience_components,
             )
         )
 
@@ -82,17 +100,39 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
             "max_horizon_days": max((profile.horizon_days for profile in profiles), default=0),
             "min_horizon_days": min((profile.horizon_days for profile in profiles), default=0),
             "capability_counts": dict(sorted(global_capabilities.items())),
+            "memory_task_counts": dict(sorted(global_memory_tasks.items())),
             "evidence_hop_histogram": dict(sorted(global_hops.items())),
+            "trajectory_stressor_counts": dict(sorted(global_stressors.items())),
+            "complexity_feature_counts": dict(sorted(global_complexity_features.items())),
+            "experience_memory_component_counts": dict(sorted(global_experience_components.items())),
         },
         "profiles": [profile.__dict__ for profile in profiles],
         "interpretation": {
             "horizon_days": "Distance between the first and last persona event.",
             "evidence_hop": "How far back from the latest event the required evidence lies; larger means longer-range memory pressure.",
+            "trajectory_stressors": "Counts of nuisance factors that make the trajectory less clean than one-event-per-session recall.",
+            "experience_memory_components": "Coverage of compositional experience-memory components: versioned state, provenance, procedural lessons, personalized storage, and negative evidence.",
             "use_in_paper": "Report these statistics by split to demonstrate long-horizon stress rather than only item count.",
         },
     }
     write_json(output_path, report)
     return report
+
+
+def _trajectory_stressors(trajectory: Trajectory) -> dict[str, int]:
+    sessions = trajectory.sessions
+    message_texts = [message.content.lower() for session in sessions for message in session.messages]
+    return {
+        "distractor_sessions": sum(1 for session in sessions if not session.linked_event_ids),
+        "multi_event_sessions": sum(1 for session in sessions if len(session.linked_event_ids) > 1),
+        "delayed_callbacks": sum(1 for text in message_texts if "earlier" in text or "deferred callback" in text),
+        "topic_switches": sum(1 for text in message_texts if "topic switch" in text or "unrelated aside" in text),
+        "contradictory_updates": sum(1 for text in message_texts if "correction to my earlier preference" in text or "newer preference wins" in text),
+        "negative_evidence_mentions": sum(1 for text in message_texts if "negative evidence" in text or "invalid" in text or "wrong metric" in text),
+        "procedural_failure_lessons": sum(1 for text in message_texts if "cuda oom" in text or "procedural failure lesson" in text),
+        "multi_role_constraints": sum(1 for text in message_texts if "multiple roles" in text or "reviewer" in text or "collaborator" in text),
+        "private_tagged_messages": sum(1 for session in sessions for message in session.messages if message.privacy_tags),
+    }
 
 
 def _hop_bucket(hops_back: int) -> str:

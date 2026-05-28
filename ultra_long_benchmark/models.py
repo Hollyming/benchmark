@@ -87,6 +87,10 @@ class MemoryChallengeQuery(BaseModel):
     prompt: str
     answer: Optional[str] = None
     evidence_event_ids: List[str] = Field(default_factory=list)
+    negative_evidence_event_ids: List[str] = Field(default_factory=list)
+    obsolete_evidence_event_ids: List[str] = Field(default_factory=list)
+    distractor_event_ids: List[str] = Field(default_factory=list)
+    memory_task: str = "generic_memory_use"
     expected_behavior: str = "answer"
     privacy_sensitive: bool = False
     rubric: Dict[str, Any] = Field(default_factory=dict)

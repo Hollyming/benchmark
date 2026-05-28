@@ -14,7 +14,7 @@ def test_smoke_pipeline_outputs_valid_artifacts():
     run_smoke_all()
     assert validate_jsonl(GENERATED / "persona_life_event_simulation" / "personas.jsonl", PersonaTimeline) == 2
     assert validate_jsonl(GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl", Trajectory) == 2
-    assert validate_jsonl(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", MemoryChallengeQuery) == 8
+    assert validate_jsonl(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", MemoryChallengeQuery) == 24
     qc = read_json(GENERATED / "annotation_and_quality_control" / "qc_report.json")
     assert qc["passed"] is True
     metrics = read_json(GENERATED / "evaluation_harness" / "baseline_metrics.json")

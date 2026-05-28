@@ -11,6 +11,10 @@
     "prompt": {"type": "string"},
     "answer": {"type": ["string", "null"]},
     "evidence_event_ids": {"type": "array", "items": {"type": "string"}},
+    "negative_evidence_event_ids": {"type": "array", "items": {"type": "string"}},
+    "obsolete_evidence_event_ids": {"type": "array", "items": {"type": "string"}},
+    "distractor_event_ids": {"type": "array", "items": {"type": "string"}},
+    "memory_task": {"type": "string"},
     "expected_behavior": {"type": "string"},
     "privacy_sensitive": {"type": "boolean"},
     "rubric": {"type": "object"}

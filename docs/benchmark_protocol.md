@@ -10,7 +10,9 @@ The benchmark unit is a memory challenge query grounded in one multi-session tra
 - `capability` from the benchmark taxonomy.
 - `prompt` shown to the evaluated system.
 - `answer` when the expected behavior is direct answering.
-- `evidence_event_ids` linking the answer or refusal decision to timeline events.
+- `evidence_event_ids` linking the answer or refusal decision to positive timeline events.
+- Optional `negative_evidence_event_ids`, `obsolete_evidence_event_ids`, and `distractor_event_ids` for retrieval/use diagnostics.
+- `memory_task`, the paper-facing task family, e.g. failure-aware experiment planning or provenance-constrained writing.
 - `expected_behavior`, including answer, refusal/redaction, or abstention behavior.
 - `rubric` with capability-specific scoring requirements.
 
@@ -39,8 +41,8 @@ Every release should include per-capability counts, per-capability metrics, and 
 1. Literature and taxonomy: record paper seeds and map each task to a capability label.
 2. Seed corpora ingestion: normalize source documents into schema-validated records with provenance, license, and content hash fields.
 3. Persona timeline simulation: create temporally ordered life events with privacy tags and provenance.
-4. Multi-session trajectory generation: convert events into dated user/assistant sessions while preserving linked event IDs.
-5. Memory challenge query generation: create prompts, expected behavior, answers, evidence links, and rubrics.
+4. Multi-session trajectory generation: convert events into dated user/assistant/tool/environment/collaborator sessions while preserving linked event IDs; include distractor sessions, multi-event sessions, delayed callbacks, topic switching, contradictory updates, invalidated evidence, procedural failures, and multi-role constraints.
+5. Memory challenge query generation: create prompts, expected behavior, answers, positive/negative/obsolete/distractor evidence links, memory-task labels, and rubrics across all capability labels, including semantic consolidation, provenance use, long-horizon planning, and abstention.
 6. Annotation and quality control: run automatic checks and prepare human annotation templates.
 7. Evaluation harness: score outputs by exact answer, policy behavior, evidence use, and capability-specific rubric items.
 8. Release packaging: emit cards, splits, provenance manifest, and audit reports.
@@ -56,7 +58,7 @@ Use this rubric before publishing any generated split. A release should either p
 | Schema validity | All JSONL rows validate against package models and JSON Schemas. | Audit report plus validation command output. |
 | Provenance completeness | Each document and event has source ID, origin, license, and hash when available. | Provenance manifest and missing-field counts. |
 | Temporal integrity | Events and sessions are timestamped, ordered, and timezone-explicit. | QC checks for ordering and malformed timestamps. |
-| Evidence linkage | Each answerable query cites sufficient event IDs; missing links are zero. | Query-to-event coverage table. |
+| Evidence linkage | Each answerable query cites sufficient positive event IDs and, when applicable, negative/obsolete/distractor IDs. | Query-to-event coverage table plus invalid-evidence counts. |
 | Capability coverage | All claimed capabilities appear in train/dev/test or are explicitly excluded. | Per-capability count table. |
 | Privacy handling | Sensitive facts are tagged and paired with refusal/redaction queries. | Privacy tag counts and refusal-query accuracy. |
 | Contamination control | Splits avoid duplicate trajectories, near-duplicate prompts, and source leakage. | Split manifest and deduplication notes. |
@@ -81,6 +83,28 @@ Recommended primary metrics:
 - `evidence_recall`: fraction of required evidence event IDs cited or retrieved.
 - `privacy_leak_rate`: fraction of privacy-sensitive queries where protected content is exposed.
 - `abstention_calibration`: accuracy on insufficient-evidence queries.
+- `trajectory_stressor_coverage`: per-split counts for distractor sessions, multi-event sessions, delayed callbacks, topic switches, contradictory updates, negative evidence, procedural failures, and multi-role constraints.
+- `negative_evidence_avoidance`: rate at which systems avoid using marked invalid, obsolete, or distractor evidence.
+- `memory_task_accuracy`: accuracy grouped by paper-facing task family, not only schema-level capability.
+
+## Innovation-Oriented Capability Framing
+
+For agent-memory papers, the benchmark should be framed around memory *use* and **compositional experience modeling**, not only memory *storage*. The local smoke data follows the design document's formula:
+
+```text
+Memory = Causal + Versioned + Provenance-aware + Task-conditioned + Actionable Experience State
+```
+
+The query and trajectory blocks are intended to expose capability gaps that are easy to miss in simple recall datasets:
+
+1. **Consolidation without contamination**: the agent must infer a stable user/project state from distributed evidence while refusing to promote side conversations into durable memory.
+2. **Provenance-aware and versioned memory use**: the agent must justify recommendations with event IDs and source relations, especially when a newer memory supersedes an older one or a result is invalidated.
+3. **Planning over deferred commitments and procedural failures**: the agent must carry callbacks, deadlines, and failure lessons across sessions instead of optimizing for the current message only.
+4. **Task-conditioned storage**: the agent must decide what is worth preserving based on user/project/future-task utility rather than static universal rules.
+5. **Multi-role constraint resolution**: the agent must separate user, collaborator, reviewer, tool, and environment constraints instead of conflating all messages into one stream.
+6. **Calibrated non-answering**: the agent must abstain when the trajectory does not contain a decision, rather than hallucinating plausible venues, dates, or collaborators.
+
+These should be reported separately from aggregate accuracy; otherwise a system can look strong by answering direct recall questions while failing the more novel agent-memory behaviors.
 
 When outputs are free-form, exact match should be supplemented with human or model-assisted judging using the released rubric. Any model-assisted judge must be identified, versioned, and sanity-checked against human labels.
 
