@@ -31,6 +31,7 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
     invalidation_targets = event_ids | claim_ids
     memory_by_id = {memory.memory_id: memory for memory in graph.memories}
     memory_ids = set(memory_by_id)
+    event_by_id = {event.event_id: event for event in events}
 
     if profile.project_id != graph.project_id:
         issues.append("project profile and memory graph project_id mismatch")
@@ -54,6 +55,13 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         for target in event.invalidates:
             if target not in invalidation_targets:
                 issues.append(f"event {event.event_id} invalidates unknown target {target}")
+        for relation_name, targets in [("causal_links", event.causal_links), ("supersedes", event.supersedes)]:
+            for target in targets:
+                target_event = event_by_id.get(target)
+                if target_event is None:
+                    issues.append(f"event {event.event_id} {relation_name} references missing event {target}")
+                elif target_event.timestamp > event.timestamp:
+                    issues.append(f"event {event.event_id} {relation_name} points to later event {target}")
 
     for memory in graph.memories:
         missing_events = sorted(set(memory.source_events) - event_ids)
@@ -74,6 +82,10 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             memory = memory_by_id.get(memory_id)
             if memory and memory.memory_type != "negative_evidence" and not memory.negative_evidence:
                 issues.append(f"probe {probe.probe_id} negative evidence {memory_id} is not a negative-evidence memory")
+        if _requires_role_attribution(probe):
+            actors = _actors_for_positive_evidence(probe, memory_by_id, event_by_id)
+            if len(actors) < 2:
+                issues.append(f"probe {probe.probe_id} role attribution evidence has fewer than two actors")
         if not probe.expected_behavior:
             issues.append(f"probe {probe.probe_id} missing expected_behavior")
 
@@ -81,8 +93,10 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         "schema_validity": True,
         "provenance_completeness": not any("missing artifact" in issue or "missing raw_pointer" in issue or "has no artifacts" in issue for issue in issues),
         "invalidation_targets_known": not any("invalidates unknown target" in issue for issue in issues),
+        "temporal_relations_valid": not any("causal_links references missing event" in issue or "supersedes references missing event" in issue or "points to later event" in issue for issue in issues),
         "memory_graph_grounding": not any("source event" in issue or "no source events" in issue for issue in issues),
         "negative_evidence_links_valid": not any("is not a negative-evidence memory" in issue for issue in issues),
+        "role_attribution_coverage": not any("role attribution evidence has fewer than two actors" in issue for issue in issues),
         "evidence_sufficiency": not any("no positive evidence" in issue or "missing memory" in issue for issue in issues),
         "negative_evidence_present": any(probe.evidence.negative for probe in probes),
         "distractor_evidence_present": any(probe.evidence.distractor for probe in probes),
@@ -113,6 +127,25 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         output_path = project_dir / "verifier_report.json"
     write_json(output_path, report)
     return report
+
+
+def _requires_role_attribution(probe: Probe) -> bool:
+    tokens = [probe.task_type, *probe.capabilities]
+    joined = " ".join(tokens).lower()
+    return any(marker in joined for marker in ["multi_role", "role_attribution", "constraint_resolution"])
+
+
+def _actors_for_positive_evidence(probe: Probe, memory_by_id: dict[str, Any], event_by_id: dict[str, CanonicalEvent]) -> set[str]:
+    actors: set[str] = set()
+    for memory_id in probe.evidence.positive:
+        memory = memory_by_id.get(memory_id)
+        if not memory:
+            continue
+        for event_id in memory.source_events:
+            event = event_by_id.get(event_id)
+            if event:
+                actors.add(event.actor)
+    return actors
 
 
 def verify_grounded_projects(projects_dir: Path) -> dict[str, Any]:

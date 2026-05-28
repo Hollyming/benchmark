@@ -3,7 +3,7 @@ from pathlib import Path
 from ultra_long_benchmark.models import CanonicalEvent, MemoryGraph, Probe, ProjectProfile, SourceArtifact, VerifierReport
 from ultra_long_benchmark.pipelines.grounded_pilot import DEFAULT_SEED_PATH, build_source_artifacts, load_manual_seed, run_manual_grounded_pilot
 from ultra_long_benchmark.pipelines.verifier import run_project_verifier
-from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_jsonl
+from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_json, write_jsonl
 from ultra_long_benchmark.validation import validate_jsonl
 
 
@@ -43,7 +43,9 @@ def test_project_verifier_checks_grounding_and_probe_evidence(tmp_path: Path):
     assert report.passed is True
     assert report.checks["provenance_completeness"] is True
     assert report.checks["invalidation_targets_known"] is True
+    assert report.checks["temporal_relations_valid"] is True
     assert report.checks["negative_evidence_links_valid"] is True
+    assert report.checks["role_attribution_coverage"] is True
     assert report.checks["memory_graph_grounding"] is True
     assert report.checks["negative_evidence_present"] is True
     assert report.checks["distractor_evidence_present"] is True
@@ -92,3 +94,33 @@ def test_verifier_fails_when_reference_event_has_no_artifact(tmp_path: Path):
     assert report.passed is False
     assert report.checks["provenance_completeness"] is False
     assert any("has no artifacts" in issue for issue in report.issues)
+
+
+def test_verifier_fails_when_temporal_relation_points_forward(tmp_path: Path):
+    summary = run_manual_grounded_pilot(tmp_path / "projects")
+    project_dir = Path(summary["project_dir"])
+    events = read_jsonl(project_dir / "events.jsonl")
+    events[0]["causal_links"] = [events[-1]["event_id"]]
+    write_jsonl(project_dir / "events.jsonl", events)
+
+    report = run_project_verifier(project_dir)
+
+    assert report.passed is False
+    assert report.checks["temporal_relations_valid"] is False
+    assert any("points to later event" in issue for issue in report.issues)
+
+
+def test_verifier_fails_when_role_probe_has_single_actor_evidence(tmp_path: Path):
+    summary = run_manual_grounded_pilot(tmp_path / "projects")
+    project_dir = Path(summary["project_dir"])
+    graph = read_json(project_dir / "memory_graph.json")
+    for memory in graph["memories"]:
+        if memory["memory_id"] == "memory_role_constraint_ablation_after_qa":
+            memory["source_events"] = ["event_004_reviewer_ablation"]
+    write_json(project_dir / "memory_graph.json", graph)
+
+    report = run_project_verifier(project_dir)
+
+    assert report.passed is False
+    assert report.checks["role_attribution_coverage"] is False
+    assert any("role attribution evidence" in issue for issue in report.issues)
