@@ -78,6 +78,8 @@ manual seed adapter
  -> verifier
 ```
 
+The adapter contract now lives in `ultra_long_benchmark.pipelines.source_adapters`: future SWE-bench, GitHub, arXiv, OpenReview, or search-trace adapters should emit the same `AdapterResult` shape (`ProjectProfile`, `SourceArtifact`, `CanonicalEvent`) before downstream memory-graph and probe stages run.
+
 This keeps the pilot deterministic and offline while making the future SWE-bench/GitHub/arXiv/OpenReview adapters match the same output contract.
 
 ```bash

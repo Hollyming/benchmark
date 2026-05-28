@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from ultra_long_benchmark.models import (
-    CanonicalEvent,
     FutureUtility,
     MemoryGraph,
     MemoryNode,
@@ -15,8 +14,8 @@ from ultra_long_benchmark.models import (
     ProbeEvidence,
     ProjectProfile,
     SourceArtifact,
-    Validity,
 )
+from ultra_long_benchmark.pipelines.source_adapters import ManualSeedAdapter
 from ultra_long_benchmark.shared.io import read_json, write_json, write_jsonl
 
 
@@ -32,10 +31,10 @@ def run_manual_grounded_pilot(output_dir: Path) -> dict[str, Any]:
     seed -> artifacts/profile -> canonical events -> memory graph -> probes -> project writer.
     This preserves deterministic CI while making future real dataset adapters easier.
     """
-    seed = load_manual_seed(DEFAULT_SEED_PATH)
-    profile = build_project_profile(seed)
-    artifacts = build_source_artifacts(seed)
-    events = build_canonical_events(seed, profile.project_id)
+    adapter_result = ManualSeedAdapter(DEFAULT_SEED_PATH).load()
+    profile = adapter_result.project_profile
+    artifacts = adapter_result.artifacts
+    events = adapter_result.events
     graph = build_memory_graph(profile.project_id)
     probes = synthesize_probes(profile.project_id)
     project_dir = write_grounded_project(output_dir, profile, artifacts, events, graph, probes)
@@ -59,17 +58,6 @@ def build_project_profile(seed: dict[str, Any]) -> ProjectProfile:
 
 def build_source_artifacts(seed: dict[str, Any]) -> list[SourceArtifact]:
     return [SourceArtifact(**artifact) for artifact in seed["artifacts"]]
-
-
-def build_canonical_events(seed: dict[str, Any], project_id: str) -> list[CanonicalEvent]:
-    events: list[CanonicalEvent] = []
-    for spec in seed["event_specs"]:
-        data = dict(spec)
-        data["project_id"] = project_id
-        if data.get("validity") is not None:
-            data["validity"] = Validity(**data["validity"])
-        events.append(CanonicalEvent(**data))
-    return events
 
 
 def build_memory_graph(project_id: str) -> MemoryGraph:
