@@ -23,6 +23,65 @@ class AdapterResult:
     seed_path: Path | None = None
 
 
+class GitHubIssueCIAdapter:
+    """Offline fixture adapter shaped like a GitHub issue/CI dataset adapter.
+
+    This adapter reads checked-in fixture records that mimic GitHub issues,
+    CI logs, patch diffs, and review comments. It deliberately avoids network
+    access while exercising the same normalization contract a future real
+    GitHub/SWE-bench adapter should implement.
+    """
+
+    def __init__(self, fixture_path: Path):
+        self.fixture_path = Path(fixture_path)
+
+    def load(self) -> AdapterResult:
+        fixture = read_json(self.fixture_path)
+        profile = ProjectProfile(**fixture["project_profile"])
+        event_id_map = fixture.get("event_id_map", {})
+        artifacts: list[SourceArtifact] = []
+        events: list[CanonicalEvent] = []
+        for record in fixture["raw_records"]:
+            artifact_id = f"artifact_{record['record_id']}"
+            artifacts.append(
+                SourceArtifact(
+                    artifact_id=artifact_id,
+                    source_dataset=record["source_dataset"],
+                    artifact_type=record["artifact_type"],
+                    uri=record.get("uri"),
+                    license=record.get("license"),
+                    content_hash=record.get("content_hash") or f"fixture_hash_{record['record_id']}",
+                    raw_pointer=record["raw_pointer"],
+                    content=record["content"],
+                    metadata={"record_id": record["record_id"], "fixture_path": str(self.fixture_path)},
+                )
+            )
+            event_id = event_id_map.get(record["record_id"], f"event_{record['record_id']}")
+            validity = record.get("validity")
+            events.append(
+                CanonicalEvent(
+                    event_id=event_id,
+                    project_id=profile.project_id,
+                    timestamp=record["timestamp"],
+                    source_dataset=record["source_dataset"],
+                    actor=record["actor"],
+                    event_type=record["event_type"],
+                    content=record["content"],
+                    artifacts=[artifact_id],
+                    raw_pointer=record["raw_pointer"],
+                    project_tags=record.get("project_tags", []),
+                    entities=record.get("entities", []),
+                    claims=record.get("claims", []),
+                    causal_links=record.get("causal_links", []),
+                    supersedes=record.get("supersedes", []),
+                    invalidates=record.get("invalidates", []),
+                    validity=Validity(**validity) if validity else None,
+                    metadata={"record_id": record["record_id"], "artifact_type": record["artifact_type"]},
+                )
+            )
+        return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=self.fixture_path)
+
+
 class ManualSeedAdapter:
     """Offline adapter for the checked-in manual grounded seed JSON.
 

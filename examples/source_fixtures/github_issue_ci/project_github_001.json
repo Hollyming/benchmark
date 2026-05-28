@@ -1,0 +1,95 @@
+{
+  "project_profile": {
+    "project_id": "project_github_001",
+    "title": "GitHub issue/CI fixture for failure-aware memory",
+    "project_goal": "Ground failure-aware experiment planning in issue, CI, patch, and review artifacts.",
+    "user_profile": {
+      "research_interest": ["agent memory", "benchmark baselines", "experiment reliability"],
+      "preference": "do not reuse invalidated experimental results"
+    },
+    "roles": {
+      "maintainer": "reviews fixes and requests evidence",
+      "ci": "reports automated test results",
+      "developer": "applies patches"
+    },
+    "phases": ["failure_triage", "patch", "validation", "writeup"],
+    "source_streams": ["github_issue", "ci_log", "patch_diff", "review_comment"],
+    "synthetic_context": false,
+    "metadata": {"adapter": "GitHubIssueCIAdapter", "fixture": true}
+  },
+  "raw_records": [
+    {
+      "record_id": "gh_issue_201",
+      "source_dataset": "github_issue_ci_fixture",
+      "artifact_type": "github_issue",
+      "uri": "https://example.org/org/memory-bench/issues/201",
+      "license": "synthetic-fixture",
+      "raw_pointer": "github_issue_ci_fixture:issue:201",
+      "content": "Issue: reproducing the 13B retrieval baseline fails on A100-40G with CUDA OOM when train_batch_size=32.",
+      "actor": "maintainer",
+      "timestamp": "2026-04-01T09:00:00+00:00",
+      "event_type": "failure_report",
+      "entities": ["13B retrieval baseline", "A100-40G", "train_batch_size=32", "CUDA OOM"],
+      "claims": ["claim_batch32_oom"],
+      "project_tags": ["agent_memory", "failure_aware_planning"],
+      "validity": {"scope": "13B retrieval baseline on A100-40G", "start": "event_gh_001_batch32_oom", "status": "active"}
+    },
+    {
+      "record_id": "ci_run_7781",
+      "source_dataset": "github_issue_ci_fixture",
+      "artifact_type": "ci_log",
+      "uri": "https://example.org/org/memory-bench/actions/runs/7781",
+      "license": "synthetic-fixture",
+      "raw_pointer": "github_issue_ci_fixture:ci:7781",
+      "content": "CI run confirms train_batch_size=8 completes and produces comparable metrics with the fixed evaluation script.",
+      "actor": "ci",
+      "timestamp": "2026-04-02T13:20:00+00:00",
+      "event_type": "recovery_validation",
+      "entities": ["train_batch_size=8", "fixed evaluation script", "comparable metrics"],
+      "claims": ["claim_batch8_validated"],
+      "causal_links": ["event_gh_001_batch32_oom"],
+      "project_tags": ["agent_memory", "failure_aware_planning"],
+      "validity": {"scope": "13B retrieval baseline on A100-40G", "start": "event_gh_002_batch8_validated", "status": "active"}
+    },
+    {
+      "record_id": "patch_42",
+      "source_dataset": "github_issue_ci_fixture",
+      "artifact_type": "patch_diff",
+      "uri": "https://example.org/org/memory-bench/pull/42/files",
+      "license": "synthetic-fixture",
+      "raw_pointer": "github_issue_ci_fixture:pull:42:diff",
+      "content": "Patch changes default train_batch_size from 32 to 8 and pins eval_script_version=v2.",
+      "actor": "developer",
+      "timestamp": "2026-04-02T14:10:00+00:00",
+      "event_type": "patch",
+      "entities": ["train_batch_size=8", "eval_script_version=v2"],
+      "claims": ["claim_patch_batch8_eval_v2"],
+      "causal_links": ["event_gh_001_batch32_oom", "event_gh_002_batch8_validated"],
+      "project_tags": ["agent_memory", "procedural_memory"],
+      "validity": {"scope": "13B retrieval baseline config", "start": "event_gh_003_patch_batch8", "status": "active"}
+    },
+    {
+      "record_id": "review_42_a",
+      "source_dataset": "github_issue_ci_fixture",
+      "artifact_type": "review_comment",
+      "uri": "https://example.org/org/memory-bench/pull/42#discussion_r1",
+      "license": "synthetic-fixture",
+      "raw_pointer": "github_issue_ci_fixture:pull:42:review:r1",
+      "content": "Reviewer notes that the earlier table used eval_script_version=v1 and should be treated as invalid evidence.",
+      "actor": "maintainer",
+      "timestamp": "2026-04-03T08:30:00+00:00",
+      "event_type": "negative_evidence",
+      "entities": ["earlier table", "eval_script_version=v1", "invalid evidence"],
+      "claims": ["claim_eval_v1_table_invalid", "claim_old_eval_v1_table"],
+      "invalidates": ["claim_old_eval_v1_table"],
+      "project_tags": ["agent_memory", "negative_evidence"],
+      "validity": {"scope": "paper table and baseline claims", "start": "event_gh_004_eval_v1_invalid", "status": "active"}
+    }
+  ],
+  "event_id_map": {
+    "gh_issue_201": "event_gh_001_batch32_oom",
+    "ci_run_7781": "event_gh_002_batch8_validated",
+    "patch_42": "event_gh_003_patch_batch8",
+    "review_42_a": "event_gh_004_eval_v1_invalid"
+  }
+}

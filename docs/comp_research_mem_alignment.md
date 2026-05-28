@@ -80,6 +80,8 @@ manual seed adapter
 
 The adapter contract now lives in `ultra_long_benchmark.pipelines.source_adapters`: future SWE-bench, GitHub, arXiv, OpenReview, or search-trace adapters should emit the same `AdapterResult` shape (`ProjectProfile`, `SourceArtifact`, `CanonicalEvent`) before downstream memory-graph and probe stages run.
 
+A first real-dataset-shaped local fixture adapter, `GitHubIssueCIAdapter`, reads `examples/source_fixtures/github_issue_ci/project_github_001.json` and normalizes GitHub issue / CI log / patch / review-style records into the same contract. It performs no network access, but its shape is intended to mirror a future SWE-bench or GitHub issue-commit adapter.
+
 This keeps the pilot deterministic and offline while making the future SWE-bench/GitHub/arXiv/OpenReview adapters match the same output contract.
 
 ```bash

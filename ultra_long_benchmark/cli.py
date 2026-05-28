@@ -6,6 +6,7 @@ from pathlib import Path
 from ultra_long_benchmark.audit import audit_generated, format_audit_text
 from ultra_long_benchmark.pipelines.evaluation import run_baseline_evaluation
 from ultra_long_benchmark.pipelines.grounded_pilot import run_manual_grounded_pilot
+from ultra_long_benchmark.pipelines.github_fixture import run_github_fixture_pilot
 from ultra_long_benchmark.pipelines.ingestion import ingest_seed_documents
 from ultra_long_benchmark.pipelines.literature import build_literature_map
 from ultra_long_benchmark.pipelines.persona import simulate_personas
@@ -37,6 +38,8 @@ def main() -> None:
     sub.add_parser("stress")
     grounded = sub.add_parser("grounded-pilot")
     grounded.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
+    github_fixture = sub.add_parser("github-fixture-pilot")
+    github_fixture.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
     verify = sub.add_parser("verify-project")
     verify.add_argument("project_dir", type=Path, help="Project directory containing artifacts/events/memory_graph/probes.")
     verify.add_argument("--output", type=Path, help="Optional verifier report output path.")
@@ -93,6 +96,12 @@ def main() -> None:
         print(f"grounded pilot written: project={summary['project_id']} probes={summary['probes']} verifier_passed={report.passed}")
         if not report.passed:
             raise SystemExit(f"grounded pilot verifier failed: {report.issues}")
+    elif args.command == "github-fixture-pilot":
+        summary = run_github_fixture_pilot(args.output_dir)
+        report = run_project_verifier(Path(summary["project_dir"]))
+        print(f"github fixture pilot written: project={summary['project_id']} probes={summary['probes']} verifier_passed={report.passed}")
+        if not report.passed:
+            raise SystemExit(f"github fixture verifier failed: {report.issues}")
     elif args.command == "verify-project":
         report = run_project_verifier(args.project_dir, args.output)
         print(f"verified project={report.project_id} passed={report.passed} issues={len(report.issues)}")
