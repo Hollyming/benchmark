@@ -1,29 +1,108 @@
-- id: "memorybench_seed_001"
-  title: "Long-horizon agent memory evaluation seed"
-  year: 2024
-  venue: "placeholder"
-  url: "https://example.org/replace-with-public-paper"
+- id: "mem0_2025"
+  title: "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory"
+  year: 2025
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2504.19413"
   capabilities:
-    - episodic_recall
-    - temporal_reasoning
-    - provenance_use
-  notes: "Placeholder seed for maintaining a literature map; replace with reviewed paper metadata."
-- id: "personalization_seed_001"
-  title: "Personalization and preference drift seed"
+    - user_policy_induction
+    - tool_action_alignment
+  notes: "Strong long-term memory baseline for extraction, consolidation, retrieval, graph memory, and cost-latency tradeoffs; our benchmark adds executable action boundaries."
+- id: "a_mem_2025"
+  title: "A-MEM: Agentic Memory for LLM Agents"
+  year: 2025
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2502.12110"
+  capabilities:
+    - user_policy_induction
+    - contextual_policy_selection
+  notes: "Dynamic Zettelkasten-style note/link/evolution method; our benchmark tests whether organized memories encode allowed/forbidden actions and exception scopes."
+- id: "memgpt_2023"
+  title: "MemGPT: Towards LLMs as Operating Systems"
   year: 2023
-  venue: "placeholder"
-  url: "https://example.org/replace-with-public-paper"
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2310.08560"
   capabilities:
-    - preference_learning
-    - conflict_resolution
-  notes: "Use this slot for work on longitudinal personalization."
-- id: "privacy_seed_001"
-  title: "Privacy-aware memory systems seed"
+    - user_policy_induction
+    - abstention_clarification
+  notes: "Virtual context management baseline; our setting asks whether retrieved long-term memory constrains future tool actions."
+- id: "zep_2025"
+  title: "Zep: A Temporal Knowledge Graph Architecture for Agent Memory"
+  year: 2025
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2501.13956"
+  capabilities:
+    - contextual_policy_selection
+    - workflow_boundary_respect
+  notes: "Temporal KG baseline for dynamic enterprise memory; our benchmark adds deontic may/must/must-not action policy labels."
+- id: "appworld_2024"
+  title: "AppWorld: A Controllable World of Apps and People for Benchmarking Interactive Coding Agents"
   year: 2024
-  venue: "placeholder"
-  url: "https://example.org/replace-with-public-paper"
+  venue: "ACL"
+  url: "https://arxiv.org/abs/2407.18901"
   capabilities:
-    - privacy_refusal
-    - abstention
-  notes: "Use this slot for work on privacy and safety constraints in memory."
-
+    - tool_action_alignment
+    - contextual_policy_selection
+  notes: "Useful executable substrate for personal-app tool tasks; our benchmark adds longitudinal user-policy induction."
+- id: "workarena_2024"
+  title: "WorkArena: How Capable Are Web Agents at Solving Common Knowledge Work Tasks?"
+  year: 2024
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2403.07718"
+  capabilities:
+    - workflow_boundary_respect
+    - tool_action_alignment
+  notes: "Enterprise workflow environment; our setting conditions future tasks on user-specific historical traces."
+- id: "tau_bench_2024"
+  title: "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains"
+  year: 2024
+  venue: "ICLR 2025"
+  url: "https://arxiv.org/abs/2406.12045"
+  capabilities:
+    - contextual_policy_selection
+    - tool_action_alignment
+  notes: "Strong reference for policy compliance in tool-user interaction; our policies are induced from longitudinal user history."
+- id: "permem_2026"
+  title: "Personalize-then-Store: Benchmarking and Learning Personalized Memory for Long-horizon Agents"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2605.25535"
+  capabilities:
+    - habit_storage_gating
+    - user_policy_induction
+  notes: "Motivates personalized memory gating; our benchmark focuses on executable work policies and future tool actions."
+- id: "memconflict_2026"
+  title: "MemConflict: Evaluating Long-Term Memory Systems Under Memory Conflicts"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2605.20926"
+  capabilities:
+    - contextual_policy_selection
+    - policy_update_exception_handling
+  notes: "Conflict-aware diagnostic benchmark; our setting maps query-conditioned validity to user policy updates and future tool actions."
+- id: "stale_2026"
+  title: "STALE: Can LLM Agents Know When Their Memories Are No Longer Valid?"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2605.06527"
+  capabilities:
+    - policy_update_exception_handling
+    - contextual_policy_selection
+  notes: "Shows implicit conflict and downstream behavior adaptation remain difficult; our benchmark extends this to work-policy revision."
+- id: "persona2web_2026"
+  title: "Persona2Web: Benchmarking Personalized Web Agents"
+  year: 2026
+  venue: "ICML 2026"
+  url: "https://arxiv.org/abs/2602.17003"
+  capabilities:
+    - habit_generalization
+    - contextual_policy_selection
+  notes: "Personalized web task inspiration; our setting spans multi-tool workflow boundaries."
+- id: "personalalign_2026"
+  title: "PersonalAlign: Personalized GUI Agents from Long-Term User Records"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2601.09636"
+  capabilities:
+    - privacy_authorization_boundary
+    - tool_action_alignment
+  notes: "Relevant long-term user-record direction for GUI agents."

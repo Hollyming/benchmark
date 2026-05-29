@@ -13,7 +13,7 @@ def package_release(timelines_path: Path, trajectories_path: Path, queries_path:
     queries = [model_validate(MemoryChallengeQuery, row) for row in read_jsonl(queries_path)]
     splits = make_splits([q.query_id for q in queries])
     manifest = {
-        "dataset_name": "ultra_long_trajectory_benchmark_synthetic_smoke",
+        "dataset_name": "long_user_policy_benchmark_synthetic_smoke",
         "version": "0.1.0",
         "licenses": ["synthetic"],
         "counts": {"timelines": len(timelines), "trajectories": len(trajectories), "queries": len(queries)},
@@ -43,17 +43,16 @@ Name: {manifest['dataset_name']}
 
 Version: {manifest['version']}
 
-This smoke release contains deterministic synthetic timelines, trajectories, and memory challenge queries. It is intended for pipeline validation, schema testing, and benchmark-method development, not for claims about production model behavior.
+This smoke release contains deterministic synthetic longitudinal tool-use timelines, trajectories, and future policy-action probes. It is intended for pipeline validation, schema testing, and benchmark-method development, not for claims about production model behavior.
 
-Primary risks: synthetic bias, privacy leakage in future real-data ingestion, annotation ambiguity, and benchmark overfitting.
+Primary risks: synthetic bias, privacy leakage in future real-data ingestion, ambiguous user authorization, and benchmark overfitting.
 """
 
 
 def benchmark_card() -> str:
     return """# Benchmark Card
 
-The benchmark evaluates memory-enabled agents over long-horizon trajectories. Capabilities include episodic recall, temporal reasoning, preference drift, contradiction resolution, provenance-aware answering, long-horizon planning, privacy-sensitive refusal, and abstention.
+The benchmark evaluates tool-using agents over longitudinal user workflow trajectories. Capabilities include implicit user-policy induction, habit generalization, contextual policy selection, tool-action alignment, workflow boundary respect, policy update and exception handling, privacy authorization boundaries, storage gating for one-off examples, and clarification when authorization is missing.
 
-Recommended reporting: per-capability accuracy, evidence citation quality, privacy refusal rate, abstention calibration, latency, storage budget, and performance as trajectory length grows.
+Recommended reporting: per-capability policy-action accuracy, boundary violation rate, exception-scope accuracy, negative-example suppression, clarification accuracy, evidence faithfulness, latency, storage budget, and performance as trajectory length grows.
 """
-

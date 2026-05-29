@@ -1,61 +1,73 @@
 # Benchmark Design
 
-This benchmark treats memory as an evaluated system capability rather than an incidental context-window feature. The data construction path creates temporally extended event streams, converts them into multi-session trajectories, and asks queries whose answers require retrieving, resolving, refusing, or applying specific memories.
+This benchmark treats long-term memory as a user-policy induction problem for tool-using agents. The construction path creates temporally extended workflow event streams and asks future tool tasks whose correct behavior depends on how this user normally works.
 
-The motivating research position is **memory as a compositional experience model**: a long-running agent should construct, update, retrieve, and apply a versioned, provenance-aware, task-conditioned, and actionable model of experience from heterogeneous trajectories, rather than only recall facts from longer conversations.
+The motivating research position is **memory as user policy**, not memory as long-context QA:
+
+```text
+Memory as User Policy = Habit Induction + Contextual Exceptions + Tool Boundaries + Authorization Scope + Negative Examples + Future Action Alignment
+```
 
 For the full protocol, quality rubric, evaluation guidance, and reproducibility checklist, see `docs/benchmark_protocol.md`.
 
 ## Capability Taxonomy
 
-- Episodic recall: identify a specific prior event among many similar sessions.
-- Semantic consolidation: infer stable, durable user/project state from repeated or distributed evidence while retaining support and ignoring transient distractors.
-- Preference learning: preserve durable preferences, distinguish them from one-off side requests, and detect preference drift.
-- Temporal reasoning: answer with correct ordering, deadlines, recency, and supersession.
-- Provenance use: cite or condition on source events and source documents, including supersession or contradiction relationships.
-- Conflict resolution: handle contradictions, corrections, and changing goals.
-- Privacy refusal: avoid exposing private identifiers or unsafe memory content.
-- Long-horizon planning: use commitments, deferred callbacks, milestones, and goals spanning weeks or months.
-- Abstention: say when the memory evidence is insufficient rather than filling gaps with plausible but unsupported facts.
+- User policy induction: infer implicit work policies from traces rather than explicit profile text.
+- Habit generalization: generalize recurring behavior across days or weeks while ignoring one-off requests.
+- Contextual policy selection: choose the policy whose conditions match the future task.
+- Tool action alignment: take allowed tool actions and avoid forbidden actions such as unauthorized send, merge, pay, or reveal.
+- Workflow boundary respect: preserve approval gates, review gates, and channel-specific limits.
+- Policy update and exception handling: apply narrow exceptions without globalizing them.
+- Proactive routine recognition: recover ordered routines such as doc review chains.
+- Privacy authorization boundary: use sensitive information only in authorized tools or contexts.
+- Habit storage gating: decide what should become durable policy memory and what should be suppressed.
+- Abstention clarification: ask when authorization is missing.
 
-The taxonomy is intended for stratified reporting. Aggregate scores should not be used alone because an agent can perform well on direct recall while failing privacy, abstention, or stale-memory cases.
+Aggregate scores should not be used alone because an agent can complete a tool task while violating the user's policy.
 
 ## Construction Contract
 
-Each stage emits typed JSONL/JSON artifacts and should be replaceable by a stronger implementation without changing downstream schemas. The smoke implementation uses synthetic data to make CI and peer review reproducible.
+Each stage emits typed JSONL/JSON artifacts and should be replaceable by stronger implementations without changing downstream schemas. The smoke implementation uses deterministic synthetic data for CI and peer review.
 
-Replacement implementations must preserve stable IDs, provenance links, privacy tags, timestamp semantics, and query evidence links. Any release that uses public data or LLM generation should include a separate QC and audit report so reviewers can distinguish method changes from dataset changes.
+Replacement implementations must preserve stable IDs, provenance links, privacy tags, timestamp semantics, policy evidence links, and action-boundary metadata. Public-data or LLM-assisted variants should include separate QC and audit reports.
+
+Policy and habit memories should use the explicit `action_boundary` field rather than relying only on prose. Boundary metadata should include allowed actions, forbidden actions, conditions, exceptions, approval or clarification requirements, and authorized/forbidden tools when applicable.
 
 ## Trajectory Complexity Contract
 
-Top-tier agent-memory evaluation should stress memory lifecycle management, not only clean retrieval. Trajectories should therefore include:
+Paper-scale trajectories should include:
 
-- Distractor sessions with no durable memory target.
-- Multi-event sessions where several memories are introduced together.
-- Delayed callbacks that require carrying commitments forward across sessions.
-- Topic switching within a session, so transient requests are not over-consolidated.
-- Contradictory updates where newer or higher-authority evidence supersedes stale memories.
+- Cross-tool workflows spanning email, calendar, docs, chat, issues, PRs, browser, files, forms, or code.
+- Distractor sessions with no durable policy target.
+- Multi-event sessions where several policies are introduced together.
+- Topic switching so transient requests are not over-consolidated.
+- Policy updates and narrow exceptions.
+- Negative examples that should suppress overgeneralization.
+- Privacy and authorization boundaries.
+- Ambiguous authorization gaps that require clarification.
 
-The smoke generator now emits compact deterministic examples of each stressor and records them in `trajectory.metadata.complexity_features`; paper-scale releases should report these features by split.
+The smoke generator records these in `trajectory.metadata.complexity_features`; releases should report them by split.
 
-## Compositional Experience Memory Contract
+## Policy Memory Contract
 
-Following the benchmark proposal in the Feishu design document, the target object is:
+The target object is a user policy model:
 
 ```text
-Memory = Causal + Versioned + Provenance-aware + Task-conditioned + Actionable Experience State
+User Policy Model = Durable Habits + Contextual Policies + Ordered Routines + Tool Boundaries + Exceptions + Negative Examples + Authorization Gaps
 ```
 
-The smoke data therefore includes compact hooks for the following paper-facing tasks:
+Current paper-facing tasks include:
 
-- Research thread resumption: recover project state and next actions from long-horizon goals and deferred commitments.
-- Failure-aware experiment planning: reuse procedural failure lessons, such as OOM-causing configurations and validated alternatives.
-- Versioned claim tracking: distinguish current beliefs from superseded preferences or invalidated results.
-- Provenance-constrained writing/use: cite event IDs and suppress unsupported or invalid sources.
-- Cross-source evidence composition: infer stable project state from multiple evidence events while ignoring distractors.
-- Task-conditioned personalized storage: store durable user/project preferences while rejecting transient side requests.
-- Multi-role constraint resolution: keep user, collaborator, reviewer, tool, and environment constraints separate.
-- Obsolete/negative evidence suppression: identify evidence that is semantically related but not currently usable.
-- Long-horizon aggregated reasoning under interference: answer across multiple sessions despite intervening updates.
+- `implicit_policy_induction`
+- `cross_day_habit_generalization`
+- `routine_step_ordering`
+- `contextual_workflow_policy_selection`
+- `policy_update_and_exception_handling`
+- `negative_example_storage_gating`
+- `tool_action_policy_alignment`
+- `privacy_authorization_boundary`
+- `authorization_gap_clarification`
+- `artifact_management_habit_transfer`
+- `cross_tool_boundary_composition`
 
-Generated queries expose `memory_task`, positive evidence, and optional `negative_evidence_event_ids`, `obsolete_evidence_event_ids`, and `distractor_event_ids` so retrieval quality and final-answer quality can be analyzed separately.
+Generated probes expose `memory_task`, positive evidence, and optional negative/obsolete/distractor evidence so policy induction quality and final tool-action quality can be analyzed separately.

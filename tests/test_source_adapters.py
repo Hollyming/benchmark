@@ -13,8 +13,8 @@ def test_manual_seed_adapter_matches_adapter_contract():
     assert all(isinstance(artifact, SourceArtifact) for artifact in result.artifacts)
     assert all(isinstance(event, CanonicalEvent) for event in result.events)
     assert result.project_profile.project_id == "project_manual_001"
-    assert len(result.artifacts) == 6
-    assert len(result.events) == 6
+    assert len(result.artifacts) == 7
+    assert len(result.events) == 7
     assert result.seed_path == DEFAULT_SEED_PATH
 
 

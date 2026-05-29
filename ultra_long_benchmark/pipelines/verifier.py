@@ -13,6 +13,7 @@ from ultra_long_benchmark.models import (
     VerifierReport,
     model_validate,
 )
+from ultra_long_benchmark.pipelines.capability_contracts import TASK_CONTRACTS
 from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_json
 
 
@@ -32,6 +33,7 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
     memory_by_id = {memory.memory_id: memory for memory in graph.memories}
     memory_ids = set(memory_by_id)
     event_by_id = {event.event_id: event for event in events}
+    artifact_by_id = {artifact.artifact_id: artifact for artifact in artifacts}
 
     if profile.project_id != graph.project_id:
         issues.append("project profile and memory graph project_id mismatch")
@@ -71,6 +73,8 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             issues.append(f"active memory {memory.memory_id} has no source events")
         if memory.status != "distractor" and memory.memory_type != "distractor" and not memory.source_events:
             issues.append(f"non-distractor memory {memory.memory_id} has no source events")
+        if _requires_action_boundary(memory) and not _has_action_boundary(memory):
+            issues.append(f"policy memory {memory.memory_id} missing action boundary")
 
     for probe in probes:
         evidence_ids = probe.evidence.positive + probe.evidence.negative + probe.evidence.obsolete + probe.evidence.distractor
@@ -82,12 +86,13 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
             memory = memory_by_id.get(memory_id)
             if memory and memory.memory_type != "negative_evidence" and not memory.negative_evidence:
                 issues.append(f"probe {probe.probe_id} negative evidence {memory_id} is not a negative-evidence memory")
-        if _requires_role_attribution(probe):
+        if _requires_multi_actor_policy(probe):
             actors = _actors_for_positive_evidence(probe, memory_by_id, event_by_id)
             if len(actors) < 2:
-                issues.append(f"probe {probe.probe_id} role attribution evidence has fewer than two actors")
+                issues.append(f"probe {probe.probe_id} multi-actor policy evidence has fewer than two actors")
         if not probe.expected_behavior:
             issues.append(f"probe {probe.probe_id} missing expected_behavior")
+        issues.extend(_contract_issues(probe, memory_by_id, event_by_id, artifact_by_id))
 
     checks = {
         "schema_validity": True,
@@ -96,8 +101,10 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         "temporal_relations_valid": not any("causal_links references missing event" in issue or "supersedes references missing event" in issue or "points to later event" in issue for issue in issues),
         "memory_graph_grounding": not any("source event" in issue or "no source events" in issue for issue in issues),
         "negative_evidence_links_valid": not any("is not a negative-evidence memory" in issue for issue in issues),
-        "role_attribution_coverage": not any("role attribution evidence has fewer than two actors" in issue for issue in issues),
+        "multi_actor_policy_coverage": not any("multi-actor policy evidence has fewer than two actors" in issue for issue in issues),
+        "action_boundaries_present": not any("missing action boundary" in issue for issue in issues),
         "evidence_sufficiency": not any("no positive evidence" in issue or "missing memory" in issue for issue in issues),
+        "task_contracts_valid": not any("violates task contract" in issue for issue in issues),
         "negative_evidence_present": any(probe.evidence.negative for probe in probes),
         "distractor_evidence_present": any(probe.evidence.distractor for probe in probes),
         "multi_task_coverage": len({probe.task_type for probe in probes}) >= 3,
@@ -129,10 +136,38 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
     return report
 
 
-def _requires_role_attribution(probe: Probe) -> bool:
+def _requires_multi_actor_policy(probe: Probe) -> bool:
     tokens = [probe.task_type, *probe.capabilities]
     joined = " ".join(tokens).lower()
-    return any(marker in joined for marker in ["multi_role", "role_attribution", "constraint_resolution"])
+    return any(marker in joined for marker in ["cross_tool_boundary", "routine_step_ordering"])
+
+
+def _requires_action_boundary(memory: Any) -> bool:
+    return memory.memory_type in {
+        "user_policy",
+        "work_habit",
+        "workflow_routine",
+        "contextual_policy",
+        "policy_exception",
+        "negative_policy_example",
+        "authorization_boundary",
+        "authorization_gap",
+    }
+
+
+def _has_action_boundary(memory: Any) -> bool:
+    boundary = getattr(memory, "action_boundary", None)
+    if boundary is None:
+        return False
+    fields = [
+        boundary.allowed_actions,
+        boundary.forbidden_actions,
+        boundary.requires_approval,
+        boundary.requires_clarification,
+        boundary.authorized_tools,
+        boundary.forbidden_tools,
+    ]
+    return any(fields)
 
 
 def _actors_for_positive_evidence(probe: Probe, memory_by_id: dict[str, Any], event_by_id: dict[str, CanonicalEvent]) -> set[str]:
@@ -146,6 +181,88 @@ def _actors_for_positive_evidence(probe: Probe, memory_by_id: dict[str, Any], ev
             if event:
                 actors.add(event.actor)
     return actors
+
+
+def _contract_issues(
+    probe: Probe,
+    memory_by_id: dict[str, Any],
+    event_by_id: dict[str, CanonicalEvent],
+    artifact_by_id: dict[str, SourceArtifact],
+) -> list[str]:
+    contract = TASK_CONTRACTS.get(probe.task_type)
+    if contract is None:
+        return []
+    issues: list[str] = []
+    positive_memories = [memory_by_id[memory_id] for memory_id in probe.evidence.positive if memory_id in memory_by_id]
+    evidence_memories = [
+        memory_by_id[memory_id]
+        for memory_id in probe.evidence.positive + probe.evidence.negative + probe.evidence.obsolete + probe.evidence.distractor
+        if memory_id in memory_by_id
+    ]
+
+    if len(positive_memories) < contract.min_positive_memories:
+        issues.append(_contract_issue(probe, f"requires at least {contract.min_positive_memories} positive memories"))
+    positive_types = {memory.memory_type for memory in positive_memories}
+    all_types = {memory.memory_type for memory in evidence_memories}
+    missing_positive_types = sorted(contract.required_positive_memory_types - positive_types)
+    if missing_positive_types:
+        issues.append(_contract_issue(probe, f"missing positive memory types {missing_positive_types}"))
+    missing_any_types = sorted(contract.required_any_memory_types - all_types)
+    if missing_any_types:
+        issues.append(_contract_issue(probe, f"missing evidence memory types {missing_any_types}"))
+    if contract.require_negative_evidence and not probe.evidence.negative:
+        issues.append(_contract_issue(probe, "requires negative evidence"))
+    if contract.require_distractor_evidence and not probe.evidence.distractor:
+        issues.append(_contract_issue(probe, "requires distractor evidence"))
+    if contract.require_future_utility and not any(memory.future_utility is not None for memory in positive_memories):
+        issues.append(_contract_issue(probe, "requires future utility labels on positive evidence"))
+    if contract.require_invalidating_event and not _has_invalidating_event(evidence_memories, event_by_id):
+        issues.append(_contract_issue(probe, "requires evidence grounded in an invalidating event"))
+
+    artifact_types, source_datasets = _supporting_artifact_coverage(positive_memories, event_by_id, artifact_by_id)
+    if len(artifact_types) < contract.min_supporting_artifact_types:
+        issues.append(_contract_issue(probe, f"requires at least {contract.min_supporting_artifact_types} supporting artifact types"))
+    if len(source_datasets) < contract.min_supporting_source_datasets:
+        issues.append(_contract_issue(probe, f"requires at least {contract.min_supporting_source_datasets} supporting source datasets"))
+    return issues
+
+
+def _contract_issue(probe: Probe, reason: str) -> str:
+    return f"probe {probe.probe_id} violates task contract for {probe.task_type}: {reason}"
+
+
+def _has_invalidating_event(memories: list[Any], event_by_id: dict[str, CanonicalEvent]) -> bool:
+    for memory in memories:
+        if memory.negative_evidence:
+            return True
+        if any(relation.type in {"invalidates", "supersedes", "obsolete"} for relation in memory.relations):
+            return True
+        for event_id in memory.source_events:
+            event = event_by_id.get(event_id)
+            if event and (event.invalidates or event.supersedes or event.event_type in {"negative_evidence", "invalidation", "correction"}):
+                return True
+    return False
+
+
+def _supporting_artifact_coverage(
+    memories: list[Any],
+    event_by_id: dict[str, CanonicalEvent],
+    artifact_by_id: dict[str, SourceArtifact],
+) -> tuple[set[str], set[str]]:
+    artifact_types: set[str] = set()
+    source_datasets: set[str] = set()
+    for memory in memories:
+        for event_id in memory.source_events:
+            event = event_by_id.get(event_id)
+            if not event:
+                continue
+            source_datasets.add(event.source_dataset)
+            for artifact_id in event.artifacts:
+                artifact = artifact_by_id.get(artifact_id)
+                if artifact:
+                    artifact_types.add(artifact.artifact_type)
+                    source_datasets.add(artifact.source_dataset)
+    return artifact_types, source_datasets
 
 
 def verify_grounded_projects(projects_dir: Path) -> dict[str, Any]:

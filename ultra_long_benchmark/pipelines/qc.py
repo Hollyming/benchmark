@@ -47,27 +47,29 @@ def run_quality_control(timelines_path: Path, trajectories_path: Path, queries_p
         for feature in trajectory.metadata.get("complexity_features", [])
     }
     for required_feature in [
+        "cross_tool_workflows",
         "distractor_sessions",
         "multi_event_sessions",
-        "delayed_callbacks",
         "topic_switching",
-        "contradictory_updates",
-        "negative_evidence",
-        "procedural_failure_lessons",
-        "multi_role_constraints",
+        "policy_updates",
+        "negative_policy_examples",
+        "privacy_authorization_boundaries",
+        "ambiguous_authorization_gaps",
     ]:
         if required_feature not in complexity_features:
             issues.append(f"missing trajectory complexity feature: {required_feature}")
     required_tasks = {
-        "research_thread_resumption",
-        "failure_aware_experiment_planning",
-        "versioned_claim_tracking",
-        "provenance_constrained_writing",
-        "cross_source_evidence_composition",
-        "task_conditioned_personalized_storage",
-        "multi_role_constraint_resolution",
-        "obsolete_negative_evidence_suppression",
-        "long_horizon_aggregated_reasoning",
+        "implicit_policy_induction",
+        "policy_update_and_exception_handling",
+        "cross_day_habit_generalization",
+        "routine_step_ordering",
+        "contextual_workflow_policy_selection",
+        "negative_example_storage_gating",
+        "tool_action_policy_alignment",
+        "privacy_authorization_boundary",
+        "authorization_gap_clarification",
+        "artifact_management_habit_transfer",
+        "cross_tool_boundary_composition",
     }
     observed_tasks = {query.memory_task for query in queries}
     for missing_task in sorted(required_tasks - observed_tasks):
@@ -95,10 +97,11 @@ For each query, annotate:
 
 - `answer_correct`: yes/no/partial
 - `evidence_sufficient`: yes/no
-- `memory_capability`: one of the schema capabilities
+- `policy_capability`: one of the schema capabilities
 - `privacy_policy_followed`: yes/no/not_applicable
+- `tool_action_allowed`: yes/no/needs_clarification
+- `policy_evidence_sufficient`: yes/no
 - `notes`: free-form rationale with cited event IDs
 
 IAA hook: export two annotator JSONL files with matching `query_id` fields and compute agreement per label.
 """
-

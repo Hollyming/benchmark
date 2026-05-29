@@ -1,6 +1,6 @@
 # memory_challenge_query_generation
 
-Generates benchmark questions that require memory use: direct recall, temporal reasoning, preference drift, contradiction handling, provenance-aware answering, planning, privacy-sensitive refusal, and abstention-ready behavior.
+Generates future tool-policy probes from longitudinal user workflow histories. Probes test implicit policy induction, habit generalization, routine ordering, tool-action boundaries, policy exceptions, negative examples, privacy/authorization boundaries, and clarification when authorization is missing.
 
 Offline demo:
 
@@ -17,4 +17,3 @@ python tasks/memory_challenge_query_generation/scripts/run_demo.py
 Outputs:
 
 - `examples/generated/memory_challenge_query_generation/queries.jsonl`
-

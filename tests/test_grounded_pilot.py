@@ -12,25 +12,25 @@ def test_manual_seed_adapter_loads_reference_artifacts():
     artifacts = build_source_artifacts(seed)
 
     assert seed["project_profile"]["project_id"] == "project_manual_001"
-    assert len(artifacts) == 6
-    assert {artifact.source_dataset for artifact in artifacts} >= {"manual_swe_like", "manual_experiment_audit"}
+    assert len(artifacts) == 7
+    assert {artifact.source_dataset for artifact in artifacts} >= {"manual_email_trace", "manual_calendar_trace", "manual_docs_trace"}
 
 
 def test_manual_grounded_pilot_builds_project_centric_artifacts(tmp_path: Path):
     summary = run_manual_grounded_pilot(tmp_path / "projects")
     project_dir = Path(summary["project_dir"])
 
-    assert summary["artifacts"] == 6
-    assert summary["events"] == 6
-    assert summary["memories"] == 5
-    assert summary["probes"] == 4
+    assert summary["artifacts"] == 7
+    assert summary["events"] == 7
+    assert summary["memories"] == 8
+    assert summary["probes"] == 5
     assert (project_dir / "project_profile.json").exists()
     assert (project_dir / "source_manifest.json").exists()
     assert (project_dir / "memory_graph.json").exists()
 
-    assert validate_jsonl(project_dir / "artifacts.jsonl", SourceArtifact) == 6
-    assert validate_jsonl(project_dir / "events.jsonl", CanonicalEvent) == 6
-    assert validate_jsonl(project_dir / "probes.jsonl", Probe) == 4
+    assert validate_jsonl(project_dir / "artifacts.jsonl", SourceArtifact) == 7
+    assert validate_jsonl(project_dir / "events.jsonl", CanonicalEvent) == 7
+    assert validate_jsonl(project_dir / "probes.jsonl", Probe) == 5
     ProjectProfile.model_validate(read_json(project_dir / "project_profile.json")) if hasattr(ProjectProfile, "model_validate") else ProjectProfile.parse_obj(read_json(project_dir / "project_profile.json"))
     MemoryGraph.model_validate(read_json(project_dir / "memory_graph.json")) if hasattr(MemoryGraph, "model_validate") else MemoryGraph.parse_obj(read_json(project_dir / "memory_graph.json"))
 
@@ -45,10 +45,12 @@ def test_project_verifier_checks_grounding_and_probe_evidence(tmp_path: Path):
     assert report.checks["invalidation_targets_known"] is True
     assert report.checks["temporal_relations_valid"] is True
     assert report.checks["negative_evidence_links_valid"] is True
-    assert report.checks["role_attribution_coverage"] is True
+    assert report.checks["multi_actor_policy_coverage"] is True
+    assert report.checks["action_boundaries_present"] is True
     assert report.checks["memory_graph_grounding"] is True
     assert report.checks["negative_evidence_present"] is True
     assert report.checks["distractor_evidence_present"] is True
+    assert report.checks["task_contracts_valid"] is True
     assert report.counts["probe_task_types"] >= 3
 
 
@@ -72,7 +74,7 @@ def test_verifier_fails_when_negative_probe_references_non_negative_memory(tmp_p
     summary = run_manual_grounded_pilot(tmp_path / "projects")
     project_dir = Path(summary["project_dir"])
     probes = read_jsonl(project_dir / "probes.jsonl")
-    probes[0]["evidence"]["negative"] = ["memory_failure_lesson_batch_size"]
+    probes[0]["evidence"]["negative"] = ["memory_email_external_approval_policy"]
     write_jsonl(project_dir / "probes.jsonl", probes)
 
     report = run_project_verifier(project_dir)
@@ -110,17 +112,33 @@ def test_verifier_fails_when_temporal_relation_points_forward(tmp_path: Path):
     assert any("points to later event" in issue for issue in report.issues)
 
 
-def test_verifier_fails_when_role_probe_has_single_actor_evidence(tmp_path: Path):
+def test_verifier_fails_when_policy_contract_is_missing_required_memory_type(tmp_path: Path):
+    summary = run_manual_grounded_pilot(tmp_path / "projects")
+    project_dir = Path(summary["project_dir"])
+    probes = read_jsonl(project_dir / "probes.jsonl")
+    for probe in probes:
+        if probe["probe_id"] == "probe_alex_exception":
+            probe["evidence"]["positive"] = ["memory_email_external_approval_policy"]
+    write_jsonl(project_dir / "probes.jsonl", probes)
+
+    report = run_project_verifier(project_dir)
+
+    assert report.passed is False
+    assert report.checks["task_contracts_valid"] is False
+    assert any("violates task contract" in issue for issue in report.issues)
+
+
+def test_verifier_fails_when_policy_memory_lacks_action_boundary(tmp_path: Path):
     summary = run_manual_grounded_pilot(tmp_path / "projects")
     project_dir = Path(summary["project_dir"])
     graph = read_json(project_dir / "memory_graph.json")
     for memory in graph["memories"]:
-        if memory["memory_id"] == "memory_role_constraint_ablation_after_qa":
-            memory["source_events"] = ["event_004_reviewer_ablation"]
+        if memory["memory_id"] == "memory_email_external_approval_policy":
+            memory["action_boundary"] = None
     write_json(project_dir / "memory_graph.json", graph)
 
     report = run_project_verifier(project_dir)
 
     assert report.passed is False
-    assert report.checks["role_attribution_coverage"] is False
-    assert any("role attribution evidence" in issue for issue in report.issues)
+    assert report.checks["action_boundaries_present"] is False
+    assert any("missing action boundary" in issue for issue in report.issues)

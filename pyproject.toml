@@ -19,3 +19,5 @@ dev = ["pytest>=7.0"]
 [project.scripts]
 ulb = "ultra_long_benchmark.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["ultra_long_benchmark*"]

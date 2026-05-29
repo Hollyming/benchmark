@@ -8,15 +8,16 @@ from pydantic import BaseModel, Field
 
 
 class Capability(str, Enum):
-    EPISODIC_RECALL = "episodic_recall"
-    SEMANTIC_CONSOLIDATION = "semantic_consolidation"
-    PREFERENCE_LEARNING = "preference_learning"
-    TEMPORAL_REASONING = "temporal_reasoning"
-    PROVENANCE_USE = "provenance_use"
-    CONFLICT_RESOLUTION = "conflict_resolution"
-    PRIVACY_REFUSAL = "privacy_refusal"
-    LONG_HORIZON_PLANNING = "long_horizon_planning"
-    ABSTENTION = "abstention"
+    USER_POLICY_INDUCTION = "user_policy_induction"
+    HABIT_GENERALIZATION = "habit_generalization"
+    CONTEXTUAL_POLICY_SELECTION = "contextual_policy_selection"
+    TOOL_ACTION_ALIGNMENT = "tool_action_alignment"
+    WORKFLOW_BOUNDARY_RESPECT = "workflow_boundary_respect"
+    POLICY_UPDATE_EXCEPTION_HANDLING = "policy_update_exception_handling"
+    PROACTIVE_ROUTINE_RECOGNITION = "proactive_routine_recognition"
+    PRIVACY_AUTHORIZATION_BOUNDARY = "privacy_authorization_boundary"
+    HABIT_STORAGE_GATING = "habit_storage_gating"
+    ABSTENTION_CLARIFICATION = "abstention_clarification"
 
 
 class Provenance(BaseModel):
@@ -97,6 +98,17 @@ class FutureUtility(BaseModel):
     expected_tasks: List[str] = Field(default_factory=list)
 
 
+class ActionBoundary(BaseModel):
+    allowed_actions: List[str] = Field(default_factory=list)
+    forbidden_actions: List[str] = Field(default_factory=list)
+    conditions: List[str] = Field(default_factory=list)
+    exceptions: List[str] = Field(default_factory=list)
+    requires_approval: List[str] = Field(default_factory=list)
+    requires_clarification: List[str] = Field(default_factory=list)
+    authorized_tools: List[str] = Field(default_factory=list)
+    forbidden_tools: List[str] = Field(default_factory=list)
+
+
 class MemoryNode(BaseModel):
     memory_id: str
     project_id: str
@@ -109,6 +121,7 @@ class MemoryNode(BaseModel):
     negative_evidence: List[str] = Field(default_factory=list)
     distractors: List[str] = Field(default_factory=list)
     future_utility: Optional[FutureUtility] = None
+    action_boundary: Optional[ActionBoundary] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -231,4 +244,3 @@ def model_validate(cls: type[BaseModel], data: Dict[str, Any]) -> BaseModel:
     if hasattr(cls, "model_validate"):
         return cls.model_validate(data)  # type: ignore[attr-defined]
     return cls.parse_obj(data)
-

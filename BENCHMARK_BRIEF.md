@@ -1,55 +1,52 @@
-# Ultra-Long Trajectory Benchmark Workspace Brief
+# Longitudinal User Policy Benchmark Workspace Brief
 
-Owner goal (from user): Build professional, top-tier-paper-quality data construction pipelines for ultra-long-horizon agent trajectories, aligned with an Agent Memory research direction. Each task block should have its own folder. Pipelines may reuse/download public data when useful and should support future LLM API calls after keys are provided.
+Owner goal: build top-tier-paper-quality data construction pipelines for evaluating whether tool-using agents can learn a user's implicit work policies, habits, routines, boundaries, and context-dependent exceptions from longitudinal workflow traces.
 
-Working directory: E:/work/benchmark
+Working directory: `/home/jmzhang/Workspace/benchmark`
 
 High-level research target:
-- Construct ultra-long trajectory datasets for evaluating agent memory systems over long horizons.
-- Emphasize realistic, multi-session, multi-source, temporally extended agent-user/environment interaction traces.
-- Capture memory requirements that current short-context benchmarks miss.
-- Produce reproducible pipelines, schemas, quality controls, and evaluation hooks suitable for a strong systems/ML/NLP paper.
 
-Assumptions because prior survey notes are not present in this folder:
-- Core innovation: benchmark ultra-long agent trajectories requiring durable memory, temporal grounding, preference/persona consistency, cross-session recall, evolving goals, and contradiction handling.
-- Required abilities: episodic recall, semantic consolidation, preference learning, temporal reasoning, provenance-aware memory use, conflict resolution, privacy/safety filtering, long-horizon planning, and robust abstention when memory evidence is insufficient.
+- Construct longitudinal, multi-tool user workflow trajectories for agent evaluation.
+- Emphasize future tool actions conditioned on how this user works, not long-context fact QA.
+- Cover email, calendar, docs, chat, issues, PRs, browser, files, forms, code, and tool outputs.
+- Use reference-grounded, LLM-assisted, verifier-driven data construction.
+- Produce reproducible schemas, quality controls, evaluation hooks, and grounded pilots suitable for a strong systems/ML/NLP paper.
 
-Expected workspace structure:
-- README.md: clear overview, task map, quickstart, design principles.
-- docs/: literature-grounded benchmark design, taxonomy, dataset cards, risk notes.
-- schemas/: JSON Schemas / Pydantic models for events, trajectories, memories, queries, annotations.
-- tasks/<task_name>/: one folder per data-construction task, with README, scripts, configs, tests/smoke checks, sample outputs.
-- shared/: shared utilities for IO, validation, time simulation, LLM client abstraction, provenance, privacy filtering.
-- configs/: YAML configs for all pipelines.
-- examples/: tiny synthetic examples committed for smoke tests.
+Core innovation:
 
-Task blocks to create:
-1. literature_and_taxonomy
-   - Output a literature map and benchmark capability taxonomy.
-   - Include scripts to maintain paper metadata from a YAML/JSON seed list.
-2. seed_corpora_ingestion
-   - Pipeline to ingest public corpora and local seed materials into normalized source documents.
-   - Avoid huge downloads by default; provide dry-run/sample mode and documented optional download commands.
-3. persona_life_event_simulation
-   - Pipeline to synthesize long-running user/persona timelines with preferences, projects, commitments, relationships, contradictions, and temporal drift.
-4. multi_session_agent_trajectory_generation
-   - Pipeline to generate multi-session agent-user trajectories from timelines and source docs.
-   - Must support future LLM API providers through environment variables.
-5. memory_challenge_query_generation
-   - Pipeline to generate benchmark questions/tasks requiring memory: direct recall, temporal, preference, contradiction, provenance, summarization, planning, privacy-sensitive refusal.
-6. annotation_and_quality_control
-   - Pipeline for automatic checks plus human annotation templates/rubrics; inter-annotator agreement hooks.
-7. evaluation_harness
-   - Harness skeleton for evaluating memory-enabled agents/baselines with metrics.
-8. release_packaging
-   - Dataset card, model card-like benchmark card, license/provenance manifest, train/dev/test split tools.
+```text
+Memory as User Policy = Habit Induction + Contextual Exceptions + Tool Boundaries + Authorization Scope + Negative Examples + Future Action Alignment
+```
+
+Required abilities:
+
+- implicit user-policy induction
+- cross-day habit generalization
+- contextual policy selection
+- tool-action alignment
+- workflow boundary respect
+- policy update and exception handling
+- proactive routine recognition
+- privacy and authorization boundary handling
+- habit storage gating
+- clarification when authorization is missing
+
+Task blocks:
+
+1. `literature_and_taxonomy`: maintain paper seeds and policy/habit capability taxonomy.
+2. `seed_corpora_ingestion`: normalize public/local source artifacts.
+3. `persona_life_event_simulation`: synthesize or ingest longitudinal user workflow timelines.
+4. `multi_session_agent_trajectory_generation`: build multi-session user/tool traces.
+5. `memory_challenge_query_generation`: generate future tool-policy probes.
+6. `annotation_and_quality_control`: automatic checks plus human annotation templates.
+7. `evaluation_harness`: evaluate policy action accuracy, boundary violations, clarification, and evidence use.
+8. `release_packaging`: dataset card, benchmark card, license/provenance manifest, splits.
 
 Quality bar:
-- Professional, reproducible, modular, typed Python.
-- No hidden API key assumptions; .env.example only.
-- Every task has a smoke test or demo command that runs offline.
-- Use schemas and validation everywhere.
-- Document top-tier paper rationale and potential failure modes.
-- Prefer small examples over huge artifacts.
 
-Codex should implement files, code, sample data, and docs. It should not wait for user input. If web/API unavailable, create seeds/placeholders and document how to extend.
+- Professional, reproducible, modular, typed Python.
+- No hidden API key assumptions.
+- Every task has an offline smoke path.
+- Use schemas and validation everywhere.
+- Preserve provenance and policy evidence links.
+- LLMs may bridge, rewrite, and synthesize probes, but must not be the source of gold policy facts.

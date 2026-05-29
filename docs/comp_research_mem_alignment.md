@@ -1,94 +1,66 @@
-# CompResearchMem Alignment Summary
+# LongUserPolicyBench Alignment Summary
 
-This repository now aligns the offline smoke benchmark with the Feishu design proposal: **Agent Memory 超长程 Benchmark：组合式经验记忆调研与构建方案**.
+This repository has shifted from a research-collaborator memory scaffold to **Longitudinal User Policy / Habit Induction for Tool-Using Agents**.
 
-## Core research claim
+## Core Research Claim
 
-Next-generation Agent Memory benchmarks should move from **memory as recall/retrieval** to **memory as compositional experience model**:
+Next-generation agent-memory benchmarks should move beyond long-context QA and fact recall. A useful personal or workplace agent must learn **how this user works** from longitudinal, cross-tool traces and apply that learned policy in future actions.
 
 ```text
-Memory = Causal + Versioned + Provenance-aware + Task-conditioned + Actionable Experience State
+Memory as User Policy = Habit Induction + Contextual Exceptions + Tool Boundaries + Authorization Scope + Negative Examples + Future Action Alignment
 ```
 
-A long-running agent should construct, update, retrieve, and apply experience memory from heterogeneous trajectories involving conversations, tools, experiments, artifacts, collaborators, and evolving project goals.
-
-## Implemented smoke-data hooks
+## Implemented Smoke Hooks
 
 The deterministic smoke generator now includes compact examples of:
 
-- Distractor sessions: transient requests that should not become durable memory.
-- Multi-event sessions: project goals and commitments introduced together.
-- Delayed callbacks: deadlines that must remain active across sessions.
-- Topic switching: side topics inside otherwise relevant sessions.
-- Contradictory updates: newer user preferences supersede older ones.
-- Negative evidence: invalidated baseline results should suppress citation/use.
-- Procedural failure lessons: CUDA OOM and validated smaller batch-size alternative.
-- Multi-role constraints: reviewer/collaborator constraints must be attributed and prioritized.
+- External email draft-vs-send approval boundaries.
+- Calendar deep-work habits.
+- Ordered document review routines.
+- Customer-visible issue filing preconditions.
+- Narrow policy exceptions for a specific partner.
+- One-off negative examples that must not become durable habits.
+- PR review and CI-before-merge boundaries.
+- Private-data channel/tool authorization boundaries.
+- Missing authorization gaps that require clarification.
+- Browser/file artifact naming habits.
 
-## Paper-facing memory task families
+## Paper-Facing Task Families
 
-Generated queries include a `memory_task` label covering:
+Generated probes include:
 
-- `research_thread_resumption`
-- `failure_aware_experiment_planning`
-- `versioned_claim_tracking`
-- `provenance_constrained_writing`
-- `cross_source_evidence_composition`
-- `task_conditioned_personalized_storage`
-- `multi_role_constraint_resolution`
-- `obsolete_negative_evidence_suppression`
-- `long_horizon_aggregated_reasoning`
-- plus `privacy_aware_memory_use` and `calibrated_non_answering`
+- `implicit_policy_induction`
+- `cross_day_habit_generalization`
+- `routine_step_ordering`
+- `contextual_workflow_policy_selection`
+- `policy_update_and_exception_handling`
+- `negative_example_storage_gating`
+- `tool_action_policy_alignment`
+- `privacy_authorization_boundary`
+- `authorization_gap_clarification`
+- `artifact_management_habit_transfer`
+- `cross_tool_boundary_composition`
 
-Each query can now include positive evidence (`evidence_event_ids`) plus optional `negative_evidence_event_ids`, `obsolete_evidence_event_ids`, and `distractor_event_ids` so retrieval diagnostics and final-answer scoring can be separated.
+Each query can include positive evidence plus optional negative, obsolete, and distractor evidence so policy induction and final action alignment can be analyzed separately.
 
-## Current smoke artifact counts
+## Grounded Pilot Flow
 
-After `python -m ultra_long_benchmark.cli smoke --all`:
+`examples/manual_grounded_seed/project_manual_001.json` now contains reference-grounded workflow artifacts across email, calendar, docs, issues, chat updates, negative examples, and privacy notes.
 
-- personas: 2
-- events: 18
-- trajectories: 2
-- sessions: 22
-- messages: 54
-- queries: 24
-- queries with negative evidence: 6
-- queries with obsolete evidence: 6
-- queries with distractors: 6
+`examples/source_fixtures/github_issue_ci/project_github_001.json` exercises a GitHub/CI policy fixture: docs PR review routing, CI-before-merge boundary, and human emergency pre-CI merge as a negative example.
 
-All examples remain deterministic and offline-runnable.
+`GHArchiveEventAdapter` in `ultra_long_benchmark/pipelines/source_adapters.py` is the first real-public-data ingestion hook. It reads locally downloaded GHArchive `.jsonl`, `.json`, or `.json.gz` slices without network access, optionally filters by repo or actor, and normalizes public PR/review/issue/CI/workflow events into the same `SourceArtifact` and `CanonicalEvent` contract. This is the preferred next source for paper-scale reference-grounded developer-workflow data because it is public, longitudinal, and directly tied to future tool actions such as review, comment, CI waiting, and merge boundaries.
 
-## Manual grounded pilot flow
+The verifier now includes task contracts for user-policy probes, catching schema-valid generations that lack the required policy memory type, negative evidence, distractor, future utility label, or cross-source coverage.
 
-The first reference-grounded pilot now uses a small checked-in seed file rather than keeping all seed data in Python:
+Policy memories now include explicit `action_boundary` metadata for allowed actions, forbidden actions, conditions, exceptions, approval/clarification requirements, and authorized/forbidden tools. The verifier checks that policy/habit memories do not remain prose-only.
 
-```text
-examples/manual_grounded_seed/project_manual_001.json
-```
-
-`ultra_long_benchmark.pipelines.grounded_pilot` treats that file as a manual seed adapter and then runs modular stages:
-
-```text
-manual seed adapter
- -> source artifacts / project profile
- -> canonical event conversion
- -> memory graph builder
- -> probe synthesizer
- -> project writer
- -> verifier
-```
-
-The adapter contract now lives in `ultra_long_benchmark.pipelines.source_adapters`: future SWE-bench, GitHub, arXiv, OpenReview, or search-trace adapters should emit the same `AdapterResult` shape (`ProjectProfile`, `SourceArtifact`, `CanonicalEvent`) before downstream memory-graph and probe stages run.
-
-A first real-dataset-shaped local fixture adapter, `GitHubIssueCIAdapter`, reads `examples/source_fixtures/github_issue_ci/project_github_001.json` and normalizes GitHub issue / CI log / patch / review-style records into the same contract. It performs no network access, but its shape is intended to mirror a future SWE-bench or GitHub issue-commit adapter.
-
-This keeps the pilot deterministic and offline while making the future SWE-bench/GitHub/arXiv/OpenReview adapters match the same output contract.
+Latest validation commands:
 
 ```bash
 python -m ultra_long_benchmark.cli smoke --all
 python -m ultra_long_benchmark.cli validate
 python -m ultra_long_benchmark.cli audit --json --output examples/generated/audit_report.json
-pytest -q
+python -m ultra_long_benchmark.cli grounded-pilot
+python -m ultra_long_benchmark.cli github-fixture-pilot
 ```
-
-Latest verification passed: schema validation, audit, and 6 pytest tests.

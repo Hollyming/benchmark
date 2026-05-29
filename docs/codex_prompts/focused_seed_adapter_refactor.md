@@ -1,4 +1,4 @@
-Read docs/codex_prompts/grounded_compresearchmem_handoff.md and implement this focused step only.
+Read docs/codex_prompts/grounded_longuserpolicy_handoff.md and implement this focused step only.
 
 In E:/work/benchmark:
 1. Refactor manual grounded pilot so its seed data is loaded from examples/manual_grounded_seed/project_manual_001.json instead of being entirely hardcoded.

@@ -1,4 +1,4 @@
-Read docs/codex_prompts/grounded_compresearchmem_handoff.md first.
+Read docs/codex_prompts/grounded_longuserpolicy_handoff.md first.
 
 Task: strengthen verifier with temporal/role checks in the grounded benchmark pipeline.
 

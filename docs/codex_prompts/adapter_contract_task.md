@@ -1,4 +1,4 @@
-Read docs/codex_prompts/grounded_compresearchmem_handoff.md first.
+Read docs/codex_prompts/grounded_longuserpolicy_handoff.md first.
 
 Task: implement the next small engineering step for source dataset adapters.
 

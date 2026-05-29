@@ -1,6 +1,6 @@
 # evaluation_harness
 
-Skeleton harness for evaluating memory-enabled agents and baselines. The smoke baseline answers gold strings directly and refuses privacy-sensitive queries, which verifies metric plumbing.
+Skeleton harness for evaluating tool-using agents and user-policy memory baselines. The smoke baseline answers gold strings directly and refuses privacy-sensitive channel violations, which verifies metric plumbing.
 
 Offline demo:
 
@@ -14,5 +14,4 @@ Task-only command after queries exist:
 python tasks/evaluation_harness/scripts/run_demo.py
 ```
 
-Recommended future metrics: per-capability accuracy, evidence citation F1, refusal accuracy, abstention calibration, latency, storage budget, and degradation as session count increases.
-
+Recommended future metrics: policy-action accuracy, boundary violation rate, exception-scope accuracy, negative-example suppression, clarification accuracy, evidence recall, latency, storage budget, and degradation as trajectory length grows.

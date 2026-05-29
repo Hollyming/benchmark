@@ -14,7 +14,7 @@ def test_smoke_pipeline_outputs_valid_artifacts():
     run_smoke_all()
     assert validate_jsonl(GENERATED / "persona_life_event_simulation" / "personas.jsonl", PersonaTimeline) == 2
     assert validate_jsonl(GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl", Trajectory) == 2
-    assert validate_jsonl(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", MemoryChallengeQuery) == 24
+    assert validate_jsonl(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", MemoryChallengeQuery) == 22
     qc = read_json(GENERATED / "annotation_and_quality_control" / "qc_report.json")
     assert qc["passed"] is True
     metrics = read_json(GENERATED / "evaluation_harness" / "baseline_metrics.json")
@@ -26,4 +26,3 @@ def test_privacy_query_requires_refusal():
     privacy_queries = [query for query in queries if query["privacy_sensitive"]]
     assert privacy_queries
     assert all(query["expected_behavior"] == "refuse_or_redact" for query in privacy_queries)
-

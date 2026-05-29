@@ -23,7 +23,7 @@ class StressProfile:
     evidence_hop_histogram: dict[str, int]
     trajectory_stressors: dict[str, int]
     complexity_features: list[str]
-    experience_memory_components: list[str]
+    policy_memory_components: list[str]
 
 
 def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queries_path: Path, output_path: Path) -> dict[str, Any]:
@@ -48,7 +48,7 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
     global_hops: Counter[str] = Counter()
     global_stressors: Counter[str] = Counter()
     global_complexity_features: Counter[str] = Counter()
-    global_experience_components: Counter[str] = Counter()
+    global_policy_components: Counter[str] = Counter()
     global_memory_tasks: Counter[str] = Counter()
     for trajectory in trajectories:
         timeline = timeline_by_persona[trajectory.persona_id]
@@ -68,12 +68,12 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
             hop_counts[bucket] += 1
         stressors = _trajectory_stressors(trajectory)
         complexity_features = sorted(str(feature) for feature in trajectory.metadata.get("complexity_features", []))
-        experience_components = sorted(str(feature) for feature in trajectory.metadata.get("experience_memory_components", []))
+        policy_components = sorted(str(feature) for feature in trajectory.metadata.get("policy_memory_components", []))
         global_capabilities.update(capability_counts)
         global_hops.update(hop_counts)
         global_stressors.update(stressors)
         global_complexity_features.update(complexity_features)
-        global_experience_components.update(experience_components)
+        global_policy_components.update(policy_components)
         profiles.append(
             StressProfile(
                 trajectory_id=trajectory.trajectory_id,
@@ -87,7 +87,7 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
                 evidence_hop_histogram=dict(sorted(hop_counts.items())),
                 trajectory_stressors=dict(sorted(stressors.items())),
                 complexity_features=complexity_features,
-                experience_memory_components=experience_components,
+                policy_memory_components=policy_components,
             )
         )
 
@@ -104,15 +104,15 @@ def compute_stress_profiles(timelines_path: Path, trajectories_path: Path, queri
             "evidence_hop_histogram": dict(sorted(global_hops.items())),
             "trajectory_stressor_counts": dict(sorted(global_stressors.items())),
             "complexity_feature_counts": dict(sorted(global_complexity_features.items())),
-            "experience_memory_component_counts": dict(sorted(global_experience_components.items())),
+            "policy_memory_component_counts": dict(sorted(global_policy_components.items())),
         },
         "profiles": [profile.__dict__ for profile in profiles],
         "interpretation": {
             "horizon_days": "Distance between the first and last persona event.",
             "evidence_hop": "How far back from the latest event the required evidence lies; larger means longer-range memory pressure.",
-            "trajectory_stressors": "Counts of nuisance factors that make the trajectory less clean than one-event-per-session recall.",
-            "experience_memory_components": "Coverage of compositional experience-memory components: versioned state, provenance, procedural lessons, personalized storage, and negative evidence.",
-            "use_in_paper": "Report these statistics by split to demonstrate long-horizon stress rather than only item count.",
+            "trajectory_stressors": "Counts of nuisance factors that make policy induction harder than one-event-per-session preference recall.",
+            "policy_memory_components": "Coverage of longitudinal user-policy components: implicit policy, habits, exceptions, tool boundaries, negative examples, and authorization scope.",
+            "use_in_paper": "Report these statistics by split to demonstrate policy-induction stress rather than only item count.",
         },
     }
     write_json(output_path, report)
@@ -125,12 +125,12 @@ def _trajectory_stressors(trajectory: Trajectory) -> dict[str, int]:
     return {
         "distractor_sessions": sum(1 for session in sessions if not session.linked_event_ids),
         "multi_event_sessions": sum(1 for session in sessions if len(session.linked_event_ids) > 1),
-        "delayed_callbacks": sum(1 for text in message_texts if "earlier" in text or "deferred callback" in text),
+        "cross_tool_workflows": sum(1 for text in message_texts if "workflow" in text or "calendar" in text or "docs" in text or "email" in text),
         "topic_switches": sum(1 for text in message_texts if "topic switch" in text or "unrelated aside" in text),
-        "contradictory_updates": sum(1 for text in message_texts if "correction to my earlier preference" in text or "newer preference wins" in text),
-        "negative_evidence_mentions": sum(1 for text in message_texts if "negative evidence" in text or "invalid" in text or "wrong metric" in text),
-        "procedural_failure_lessons": sum(1 for text in message_texts if "cuda oom" in text or "procedural failure lesson" in text),
-        "multi_role_constraints": sum(1 for text in message_texts if "multiple roles" in text or "reviewer" in text or "collaborator" in text),
+        "policy_updates": sum(1 for text in message_texts if "policy update" in text or "exception scope" in text),
+        "negative_policy_examples": sum(1 for text in message_texts if "negative policy example" in text or "non-habit" in text or "one-off" in text),
+        "privacy_authorization_boundaries": sum(1 for text in message_texts if "privacy and authorization boundary" in text or "private" in text),
+        "ambiguous_authorization_gaps": sum(1 for text in message_texts if "authorization gap" in text or "not establish" in text),
         "private_tagged_messages": sum(1 for session in sessions for message in session.messages if message.privacy_tags),
     }
 

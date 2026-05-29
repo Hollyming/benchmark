@@ -16,19 +16,39 @@ def build_literature_map(seed_path: Path, output_dir: Path) -> Dict[str, Any]:
 
     taxonomy = [
         {
-            "capability": "episodic_recall",
-            "definition": "Recover specific past interactions with temporal and contextual anchors.",
-            "stressors": ["many distractor sessions", "similar repeated events", "delayed query"],
+            "capability": "user_policy_induction",
+            "definition": "Infer an implicit user work policy from longitudinal tool-use traces.",
+            "stressors": ["implicit approvals", "draft-vs-send boundaries", "sparse policy evidence"],
         },
         {
-            "capability": "temporal_reasoning",
-            "definition": "Order memories, resolve recency, and reason over changing states.",
-            "stressors": ["preference drift", "deadline changes", "conflicting versions"],
+            "capability": "habit_generalization",
+            "definition": "Generalize stable habits across days or weeks without overfitting one-off events.",
+            "stressors": ["recurring calendar patterns", "distractor sessions", "negative examples"],
         },
         {
-            "capability": "privacy_refusal",
-            "definition": "Refuse or redact sensitive memory use when policy requires it.",
-            "stressors": ["private identifiers", "secret-like strings", "benign adjacent facts"],
+            "capability": "tool_action_alignment",
+            "definition": "Choose allowed tool actions and avoid forbidden actions under the user's policy.",
+            "stressors": ["send/merge/pay boundaries", "CI or review gates", "authorization gaps"],
+        },
+        {
+            "capability": "privacy_authorization_boundary",
+            "definition": "Use private information only in authorized tools or contexts.",
+            "stressors": ["private identifiers", "tool-specific permission", "overbroad refusal"],
+        },
+        {
+            "capability": "policy_update_exception_handling",
+            "definition": "Distinguish global policy changes, narrow exceptions, stale policies, and one-off counterexamples.",
+            "stressors": ["implicit conflicts", "stale premises", "narrow exception scopes", "human-only emergency actions"],
+        },
+        {
+            "capability": "workflow_boundary_respect",
+            "definition": "Preserve user-specific gates in ordered workflows, such as review, approval, CI, or secure-channel requirements.",
+            "stressors": ["CI-before-merge", "review-before-share", "secure-form-only fields", "multi-tool routines"],
+        },
+        {
+            "capability": "abstention_clarification",
+            "definition": "Ask for clarification when longitudinal history does not authorize a high-impact action.",
+            "stressors": ["payment", "external send", "private data sharing", "ambiguous delegation"],
         },
     ]
     result = {
@@ -55,4 +75,3 @@ def render_taxonomy_markdown(taxonomy: List[Dict[str, Any]], capability_to_paper
             lines.append("Seed papers: " + ", ".join(linked) + ".")
         lines.append("")
     return "\n".join(lines)
-
