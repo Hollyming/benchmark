@@ -1,0 +1,31 @@
+baseline:
+  name: raw_rag_project
+  family: retrieval
+  description: Deterministic lexical raw-event retrieval baseline for project-level policy probes.
+  entrypoint: ultra_long_benchmark.cli:evaluate-project
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: none
+data:
+  project_dir: examples/generated/projects/project_gharchive_001
+  output_path: examples/generated/evaluation_harness/project_gharchive_baselines.json
+evaluation:
+  mode: project_probe_text
+  top_k: 3
+  baselines:
+    - raw_rag
+  metrics:
+    - must_include_recall
+    - must_not_violation_rate
+    - evidence_recall
+    - boundary_action_recall
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 2
+  mem: 8G
+  time: "00:20:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Runs without network access and without model weights.

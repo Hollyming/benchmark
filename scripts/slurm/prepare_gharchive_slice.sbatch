@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#SBATCH --job-name=longuserpolicy-gharchive-prep
+#SBATCH --partition=cpu
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=01:00:00
+#SBATCH --output=logs/slurm/%x-%j.out
+#SBATCH --error=logs/slurm/%x-%j.err
+
+set -euo pipefail
+
+ROOT="${ROOT:-/home/jmzhang/Workspace/benchmark}"
+INPUT="${INPUT:?Set INPUT to a local GHArchive .jsonl, .json, or .json.gz slice}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${ROOT}/examples/generated}"
+SLICE_OUTPUT="${SLICE_OUTPUT:-}"
+SLICE_MANIFEST="${SLICE_MANIFEST:-}"
+WINDOW_DAYS="${WINDOW_DAYS:-7}"
+STAGE_PLAN_PROFILE="${STAGE_PLAN_PROFILE:-paper}"
+STAGE_PLAN_ALLOW_FAIL="${STAGE_PLAN_ALLOW_FAIL:-1}"
+REQUIRE_READY_FOR_ANNOTATION="${REQUIRE_READY_FOR_ANNOTATION:-0}"
+CONDA_ENV="${CONDA_ENV:-benchmark}"
+MAX_RECORDS="${MAX_RECORDS:-}"
+MAX_RECORDS_PER_REPO="${MAX_RECORDS_PER_REPO:-}"
+REQUIRE_ELIGIBLE_REPO="${REQUIRE_ELIGIBLE_REPO:-0}"
+export ROOT INPUT OUTPUT_ROOT SLICE_OUTPUT SLICE_MANIFEST WINDOW_DAYS STAGE_PLAN_PROFILE STAGE_PLAN_ALLOW_FAIL REQUIRE_READY_FOR_ANNOTATION CONDA_ENV MAX_RECORDS MAX_RECORDS_PER_REPO REQUIRE_ELIGIBLE_REPO
+
+cd "${ROOT}"
+bash scripts/prepare_gharchive_slice.sh

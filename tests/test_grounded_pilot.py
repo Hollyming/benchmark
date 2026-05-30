@@ -142,3 +142,19 @@ def test_verifier_fails_when_policy_memory_lacks_action_boundary(tmp_path: Path)
     assert report.passed is False
     assert report.checks["action_boundaries_present"] is False
     assert any("missing action boundary" in issue for issue in report.issues)
+
+
+def test_verifier_fails_when_probe_expected_behavior_omits_action_boundary(tmp_path: Path):
+    summary = run_manual_grounded_pilot(tmp_path / "projects")
+    project_dir = Path(summary["project_dir"])
+    probes = read_jsonl(project_dir / "probes.jsonl")
+    for probe in probes:
+        if probe["probe_id"] == "probe_external_email_policy":
+            probe["expected_behavior"] = {"must_include": ["answer carefully"], "must_not_include": ["be wrong"]}
+    write_jsonl(project_dir / "probes.jsonl", probes)
+
+    report = run_project_verifier(project_dir)
+
+    assert report.passed is False
+    assert report.checks["action_boundaries_aligned"] is False
+    assert any("does not reflect action boundary" in issue or "does not cover forbidden action boundary" in issue for issue in report.issues)

@@ -1,0 +1,32 @@
+baseline:
+  name: memory_submission_event_profile_stub
+  family: memory_system_contract
+  description: Deterministic no-gold event-profile memory adapter over exported submission inputs, producing ProjectPrediction JSONL.
+  entrypoint: ultra_long_benchmark.cli:run-memory-submission-baseline
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: event_profile_stub
+data:
+  project_dir: examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs
+  predictions_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_memory_profile_stub_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_memory_profile_stub_report.json
+evaluation:
+  mode: memory_submission_prediction_generation
+  adapter: event_profile_stub
+  top_k: 5
+  metrics:
+    - predictions_written
+    - retrieved_events_total
+    - no_gold_input_contract
+    - external_memory_runner_contract
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 2
+  mem: 8G
+  time: "00:20:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Local contract baseline; reads no-gold submission inputs only and does not invoke LLM/API dependencies.

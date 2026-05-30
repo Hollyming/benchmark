@@ -1,0 +1,34 @@
+baseline:
+  name: mem0_project
+  family: memory_system
+  description: Placeholder config for Mem0-style project probe evaluation once the runner is installed.
+  entrypoint: scripts/run_memory_baseline.py:mem0
+  requires_llm_api: true
+  requires_gpu: true
+  memory_backend: mem0
+data:
+  project_dir: examples/generated/projects/project_gharchive_001
+  output_path: examples/generated/evaluation_harness/mem0_project_gharchive.json
+evaluation:
+  mode: project_probe_action_trace
+  top_k: 8
+  metrics:
+    - policy_action_accuracy
+    - boundary_violation_rate
+    - evidence_recall
+    - trace_boundary_violation_rate
+resources:
+  partition: RTX4090
+  gpus: 1
+  cpus_per_task: 8
+  mem: 48G
+  time: "04:00:00"
+reproducibility:
+  seed: 0
+  deterministic: false
+  notes: Requires provider/model configuration and Mem0 installation before execution.
+environment:
+  required:
+    - OPENAI_API_KEY
+  optional:
+    - HF_HOME=/data1/public/hf

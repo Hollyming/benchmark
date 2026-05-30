@@ -157,6 +157,106 @@ class Probe(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class TraceAction(BaseModel):
+    action_id: str
+    tool: str
+    action: str
+    timestamp: Optional[datetime] = None
+    args: Dict[str, Any] = Field(default_factory=dict)
+    rationale: Optional[str] = None
+    requires_approval: bool = False
+    approval_obtained: bool = False
+    clarification_requested: bool = False
+
+
+class ActionTrace(BaseModel):
+    trace_id: str
+    project_id: str
+    probe_id: str
+    actions: List[TraceAction] = Field(default_factory=list)
+    retrieved_memory_ids: List[str] = Field(default_factory=list)
+    retrieved_event_ids: List[str] = Field(default_factory=list)
+    final_answer: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectPrediction(BaseModel):
+    prediction_id: str
+    project_id: str
+    probe_id: str
+    prediction: str
+    retrieved_memory_ids: List[str] = Field(default_factory=list)
+    retrieved_event_ids: List[str] = Field(default_factory=list)
+    retrieved_artifact_ids: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AnnotationEvidenceSnippet(BaseModel):
+    event_id: str
+    source_dataset: str
+    event_type: str
+    timestamp: datetime
+    actor: str
+    content: str
+    artifact_ids: List[str] = Field(default_factory=list)
+    raw_pointer: str = ""
+    uri: Optional[str] = None
+    content_hashes: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyAnnotationTask(BaseModel):
+    annotation_id: str
+    candidate_id: str
+    repo: str
+    candidate_type: str
+    policy_candidate: str
+    confidence: float
+    supporting_evidence: List[AnnotationEvidenceSnippet] = Field(default_factory=list)
+    negative_evidence: List[AnnotationEvidenceSnippet] = Field(default_factory=list)
+    action_boundary_candidate: ActionBoundary = Field(default_factory=ActionBoundary)
+    future_tasks: List[str] = Field(default_factory=list)
+    mining_rule: str = ""
+    llm_instructions: Dict[str, Any] = Field(default_factory=dict)
+    verifier_expectations: Dict[str, Any] = Field(default_factory=dict)
+    human_review_checklist: List[str] = Field(default_factory=list)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyAnnotationPack(BaseModel):
+    pack_id: str
+    source_dataset: str
+    input_path: str
+    repo_filter: Optional[str] = None
+    generated_at: datetime
+    tasks: List[PolicyAnnotationTask] = Field(default_factory=list)
+    constraints: Dict[str, Any] = Field(default_factory=dict)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyRewriteProposal(BaseModel):
+    proposal_id: str
+    annotation_id: str
+    candidate_id: str
+    rewritten_policy: str
+    future_probe_query: str
+    expected_behavior: Dict[str, Any] = Field(default_factory=dict)
+    positive_event_ids: List[str] = Field(default_factory=list)
+    negative_event_ids: List[str] = Field(default_factory=list)
+    action_boundary: ActionBoundary = Field(default_factory=ActionBoundary)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyRewriteValidationReport(BaseModel):
+    proposal_id: str
+    annotation_id: str
+    candidate_id: str
+    passed: bool
+    issues: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    checks: Dict[str, bool] = Field(default_factory=dict)
+
+
 class VerifierReport(BaseModel):
     project_id: str
     generated_at: datetime

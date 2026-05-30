@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 from ultra_long_benchmark.models import CanonicalEvent, ProjectProfile, SourceArtifact, Validity
+from ultra_long_benchmark.shared.privacy import privacy_tags, redact
 from ultra_long_benchmark.shared.provenance import content_hash
 from ultra_long_benchmark.shared.io import read_json
 
@@ -204,6 +205,149 @@ class GHArchiveEventAdapter:
         return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=seed_path)
 
 
+class EmailWorkflowAdapter:
+    """Manifest-first adapter for public or licensed longitudinal email traces.
+
+    The adapter is intentionally conservative: email corpora are high-risk for
+    privacy and redistribution. Callers must provide explicit provenance,
+    license, redistribution, and privacy-review metadata before rows are loaded.
+    """
+
+    REQUIRED_MANIFEST_FIELDS = {
+        "dataset_name",
+        "source_dataset",
+        "license",
+        "redistribution",
+        "privacy_review",
+        "project_id",
+        "records",
+    }
+
+    def __init__(self, manifest_path: Path, redact_sensitive: bool = True):
+        self.manifest_path = Path(manifest_path)
+        self.redact_sensitive = redact_sensitive
+
+    def load(self) -> AdapterResult:
+        manifest = read_json(self.manifest_path)
+        self._validate_manifest(manifest)
+        source_dataset = manifest["source_dataset"]
+        dataset_name = manifest["dataset_name"]
+        license_name = manifest["license"]
+        records = manifest["records"]
+        profile = ProjectProfile(
+            project_id=manifest["project_id"],
+            title=manifest.get("title") or f"Email workflow trace: {dataset_name}",
+            project_goal=manifest.get("project_goal") or "Induce email workflow policies, response habits, approval boundaries, and privacy constraints.",
+            user_profile={
+                "source": source_dataset,
+                "dataset_name": dataset_name,
+                "privacy_review": manifest["privacy_review"],
+                "redistribution": manifest["redistribution"],
+            },
+            roles=manifest.get("roles", {}),
+            phases=manifest.get("phases", ["email_triage", "draft", "approval", "follow_up"]),
+            source_streams=["email"],
+            synthetic_context=bool(manifest.get("synthetic_context", False)),
+            metadata={
+                "manifest_path": str(self.manifest_path),
+                "license": license_name,
+                "license_url": manifest.get("license_url"),
+                "privacy_review": manifest["privacy_review"],
+                "redistribution": manifest["redistribution"],
+            },
+        )
+        artifacts: list[SourceArtifact] = []
+        events: list[CanonicalEvent] = []
+        for index, record in enumerate(records, start=1):
+            self._validate_record(record, index)
+            record_id = str(record["record_id"])
+            raw_content = _format_email_record_content(record)
+            tags = sorted(set(privacy_tags(raw_content) + record.get("privacy_tags", [])))
+            content = redact(raw_content) if self.redact_sensitive else raw_content
+            sender = _redact_metadata_value(record.get("sender"), self.redact_sensitive)
+            recipients = [_redact_metadata_value(recipient, self.redact_sensitive) for recipient in record.get("recipients", [])]
+            subject = _redact_metadata_value(record.get("subject"), self.redact_sensitive)
+            artifact_id = f"artifact_email_{_safe_id(record_id)}"
+            event_id = record.get("event_id") or f"event_email_{_safe_id(record_id)}"
+            raw_pointer = record.get("raw_pointer") or f"{self.manifest_path}#records/{index}"
+            artifacts.append(
+                SourceArtifact(
+                    artifact_id=artifact_id,
+                    source_dataset=source_dataset,
+                    artifact_type=record.get("artifact_type", "email_message"),
+                    uri=record.get("uri"),
+                    license=license_name,
+                    content_hash=content_hash(raw_content),
+                    raw_pointer=raw_pointer,
+                    content=content,
+                    metadata={
+                        "record_id": record_id,
+                        "sender": sender,
+                        "recipients": recipients,
+                        "subject": subject,
+                        "privacy_tags": tags,
+                        "redacted": self.redact_sensitive,
+                        "manifest_path": str(self.manifest_path),
+                    },
+                )
+            )
+            validity = record.get("validity")
+            events.append(
+                CanonicalEvent(
+                    event_id=event_id,
+                    project_id=profile.project_id,
+                    timestamp=record["timestamp"],
+                    source_dataset=source_dataset,
+                    actor=record.get("actor") or sender or "unknown_email_actor",
+                    event_type=record.get("event_type", "email_message"),
+                    content=content,
+                    artifacts=[artifact_id],
+                    raw_pointer=raw_pointer,
+                    project_tags=["email", "workflow"] + record.get("project_tags", []),
+                    entities=record.get("entities", []),
+                    claims=record.get("claims", []),
+                    causal_links=record.get("causal_links", []),
+                    supersedes=record.get("supersedes", []),
+                    invalidates=record.get("invalidates", []),
+                    validity=Validity(**validity) if validity else None,
+                    metadata={
+                        "record_id": record_id,
+                        "sender": sender,
+                        "recipients": recipients,
+                        "subject": subject,
+                        "privacy_tags": tags,
+                        "redacted": self.redact_sensitive,
+                    },
+                )
+            )
+        return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=self.manifest_path)
+
+    @classmethod
+    def _validate_manifest(cls, manifest: dict) -> None:
+        missing = sorted(cls.REQUIRED_MANIFEST_FIELDS - manifest.keys())
+        if missing:
+            raise ValueError(f"email workflow manifest missing required fields: {missing}")
+        if not manifest.get("license") or str(manifest.get("license")).lower() in {"unknown", "n/a", "none"}:
+            raise ValueError("email workflow manifest requires a known license")
+        redistribution = manifest.get("redistribution", {})
+        if not isinstance(redistribution, dict) or redistribution.get("allowed") is not True:
+            raise ValueError("email workflow manifest requires redistribution.allowed=true")
+        privacy_review = manifest.get("privacy_review", {})
+        if not isinstance(privacy_review, dict) or privacy_review.get("status") != "passed":
+            raise ValueError("email workflow manifest requires privacy_review.status='passed'")
+        if privacy_review.get("pii_redaction") is not True:
+            raise ValueError("email workflow manifest requires privacy_review.pii_redaction=true")
+        if not isinstance(manifest.get("records"), list):
+            raise ValueError("email workflow manifest records must be a list")
+
+    @staticmethod
+    def _validate_record(record: dict, index: int) -> None:
+        required = {"record_id", "timestamp", "content"}
+        missing = sorted(required - record.keys())
+        if missing:
+            raise ValueError(f"email workflow record {index} missing required fields: {missing}")
+
+
 class ManualSeedAdapter:
     """Offline adapter for the checked-in manual grounded seed JSON.
 
@@ -232,7 +376,7 @@ class ManualSeedAdapter:
         return CanonicalEvent(**data)
 
 
-def _iter_json_records(path: Path) -> Iterable[dict]:
+def iter_gharchive_json_records(path: Path) -> Iterable[dict]:
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rt", encoding="utf-8") as handle:
         first_non_ws = ""
@@ -243,17 +387,61 @@ def _iter_json_records(path: Path) -> Iterable[dict]:
             if not char.isspace():
                 first_non_ws = char
         handle.seek(0)
+        suffixes = "".join(path.suffixes).lower()
+        if first_non_ws == "{" and suffixes != ".json":
+            for line in handle:
+                if line.strip():
+                    record = json.loads(line)
+                    if isinstance(record, dict):
+                        yield record
+            return
         if first_non_ws == "[":
             data = json.load(handle)
             for record in data:
                 if isinstance(record, dict):
                     yield record
             return
+        if first_non_ws == "{":
+            try:
+                data = json.load(handle)
+            except json.JSONDecodeError:
+                handle.seek(0)
+            else:
+                if isinstance(data, dict):
+                    yield data
+                elif isinstance(data, list):
+                    for record in data:
+                        if isinstance(record, dict):
+                            yield record
+                return
         for line in handle:
             if line.strip():
                 record = json.loads(line)
                 if isinstance(record, dict):
                     yield record
+
+
+def _iter_json_records(path: Path) -> Iterable[dict]:
+    yield from iter_gharchive_json_records(path)
+
+
+def _format_email_record_content(record: dict) -> str:
+    fields = []
+    if record.get("subject"):
+        fields.append(f"Subject: {record['subject']}")
+    if record.get("sender"):
+        fields.append(f"From: {record['sender']}")
+    recipients = record.get("recipients") or []
+    if recipients:
+        fields.append("To: " + ", ".join(str(recipient) for recipient in recipients))
+    fields.append(str(record["content"]))
+    return "\n".join(fields)
+
+
+def _redact_metadata_value(value: object, enabled: bool) -> object:
+    if value is None or not enabled:
+        return value
+    return redact(str(value))
 
 
 def _normalize_gharchive_event_type(record: dict) -> str:
@@ -289,6 +477,7 @@ def _summarize_gharchive_event(record: dict) -> str:
 
 
 def _payload_subject(payload: dict) -> str:
+    sections = []
     for key in ("pull_request", "issue", "review", "comment", "check_run", "check_suite", "workflow_run"):
         value = payload.get(key)
         if isinstance(value, dict):
@@ -300,10 +489,24 @@ def _payload_subject(payload: dict) -> str:
                 fragments.append(f"number={number}")
             if title:
                 fragments.append(f"title={str(title)[:240]}")
+            body = value.get("body")
+            if body and body != title:
+                fragments.append(f"body={str(body)[:240]}")
+            labels = _github_label_names(value.get("labels"))
+            if labels:
+                fragments.append("labels=" + "|".join(labels[:8]))
+            assignees = _github_actor_logins(value.get("assignees"))
+            if assignees:
+                fragments.append("assignees=" + "|".join(assignees[:8]))
+            assignee = value.get("assignee")
+            if isinstance(assignee, dict) and assignee.get("login"):
+                fragments.append(f"assignee={assignee['login']}")
             if status:
                 fragments.append(f"status={status}")
             if fragments:
-                return f"{key}: " + ", ".join(fragments)
+                sections.append(f"{key}: " + ", ".join(fragments))
+    if sections:
+        return "; ".join(sections)
     if payload.get("ref"):
         return f"ref={payload['ref']}"
     return ""
@@ -321,6 +524,30 @@ def _gharchive_entities(record: dict) -> list[str]:
                 elif isinstance(candidate, str):
                     entities.append(candidate)
     return sorted(set(entities))
+
+
+def _github_label_names(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    labels = []
+    for item in value:
+        if isinstance(item, dict) and item.get("name"):
+            labels.append(str(item["name"]))
+        elif isinstance(item, str):
+            labels.append(item)
+    return labels
+
+
+def _github_actor_logins(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    logins = []
+    for item in value:
+        if isinstance(item, dict) and item.get("login"):
+            logins.append(str(item["login"]))
+        elif isinstance(item, str):
+            logins.append(item)
+    return logins
 
 
 def _gharchive_claims(record: dict) -> list[str]:

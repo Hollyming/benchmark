@@ -93,6 +93,7 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         if not probe.expected_behavior:
             issues.append(f"probe {probe.probe_id} missing expected_behavior")
         issues.extend(_contract_issues(probe, memory_by_id, event_by_id, artifact_by_id))
+        issues.extend(_action_boundary_alignment_issues(probe, memory_by_id))
 
     checks = {
         "schema_validity": True,
@@ -103,6 +104,7 @@ def run_project_verifier(project_dir: Path, output_path: Path | None = None) -> 
         "negative_evidence_links_valid": not any("is not a negative-evidence memory" in issue for issue in issues),
         "multi_actor_policy_coverage": not any("multi-actor policy evidence has fewer than two actors" in issue for issue in issues),
         "action_boundaries_present": not any("missing action boundary" in issue for issue in issues),
+        "action_boundaries_aligned": not any("does not reflect action boundary" in issue or "does not cover forbidden action boundary" in issue for issue in issues),
         "evidence_sufficiency": not any("no positive evidence" in issue or "missing memory" in issue for issue in issues),
         "task_contracts_valid": not any("violates task contract" in issue for issue in issues),
         "negative_evidence_present": any(probe.evidence.negative for probe in probes),
@@ -229,6 +231,103 @@ def _contract_issues(
 
 def _contract_issue(probe: Probe, reason: str) -> str:
     return f"probe {probe.probe_id} violates task contract for {probe.task_type}: {reason}"
+
+
+def _action_boundary_alignment_issues(probe: Probe, memory_by_id: dict[str, Any]) -> list[str]:
+    expected_text = _flatten_expected_behavior(probe.expected_behavior)
+    if not expected_text:
+        return []
+    positive_memories = [memory_by_id[memory_id] for memory_id in probe.evidence.positive if memory_id in memory_by_id]
+    boundary_memories = [memory for memory in positive_memories if _has_action_boundary(memory)]
+    issues = []
+    for memory in boundary_memories:
+        if not _memory_boundary_reflected(memory, expected_text):
+            issues.append(f"probe {probe.probe_id} does not reflect action boundary from memory {memory.memory_id}")
+    if boundary_memories and _has_forbidden_boundary(boundary_memories) and not _forbidden_boundary_reflected(boundary_memories, expected_text):
+        issues.append(f"probe {probe.probe_id} does not cover forbidden action boundary from positive evidence")
+    return issues
+
+
+def _flatten_expected_behavior(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return " ".join(_flatten_expected_behavior(item) for item in value.values())
+    if isinstance(value, list):
+        return " ".join(_flatten_expected_behavior(item) for item in value)
+    return str(value).lower().replace("_", " ")
+
+
+def _memory_boundary_reflected(memory: Any, expected_text: str) -> bool:
+    boundary = getattr(memory, "action_boundary", None)
+    if boundary is None:
+        return True
+    entries = (
+        boundary.allowed_actions
+        + boundary.forbidden_actions
+        + boundary.requires_approval
+        + boundary.requires_clarification
+        + boundary.authorized_tools
+        + boundary.forbidden_tools
+        + boundary.conditions
+    )
+    return not entries or any(_boundary_entry_matches(entry, expected_text) for entry in entries)
+
+
+def _has_forbidden_boundary(memories: list[Any]) -> bool:
+    for memory in memories:
+        boundary = getattr(memory, "action_boundary", None)
+        if boundary and (boundary.forbidden_actions or boundary.forbidden_tools or boundary.requires_approval or boundary.requires_clarification):
+            return True
+    return False
+
+
+def _forbidden_boundary_reflected(memories: list[Any], expected_text: str) -> bool:
+    entries = []
+    for memory in memories:
+        boundary = getattr(memory, "action_boundary", None)
+        if boundary:
+            entries.extend(boundary.forbidden_actions + boundary.forbidden_tools + boundary.requires_approval + boundary.requires_clarification)
+    return any(_boundary_entry_matches(entry, expected_text) for entry in entries)
+
+
+def _boundary_entry_matches(entry: str, expected_text: str) -> bool:
+    phrase = str(entry).lower().replace("_", " ")
+    if phrase and phrase in expected_text:
+        return True
+    entry_tokens = set(_boundary_tokens(str(entry)))
+    if not entry_tokens:
+        return False
+    expected_tokens = set(_boundary_tokens(expected_text))
+    overlap = entry_tokens & expected_tokens
+    if len(entry_tokens) <= 2:
+        distinctive = {"approval", "ci", "draft", "review", "summary", "merge", "send", "store", "chat", "email", "form", "forms", "alex", "lina"}
+        return entry_tokens <= expected_tokens or bool(overlap & distinctive)
+    return len(overlap) >= 2
+
+
+def _boundary_tokens(text: str) -> list[str]:
+    import re
+
+    stopwords = {
+        "a",
+        "an",
+        "and",
+        "as",
+        "be",
+        "by",
+        "for",
+        "in",
+        "is",
+        "it",
+        "of",
+        "only",
+        "or",
+        "the",
+        "to",
+        "with",
+    }
+    return [token for token in re.split(r"[^a-z0-9]+", text.lower()) if token and token not in stopwords]
 
 
 def _has_invalidating_event(memories: list[Any], event_by_id: dict[str, CanonicalEvent]) -> bool:

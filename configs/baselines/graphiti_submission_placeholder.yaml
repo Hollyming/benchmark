@@ -1,0 +1,40 @@
+baseline:
+  name: graphiti_submission_placeholder
+  family: memory_system
+  description: Gated Zep/Graphiti-style temporal-KG adapter placeholder for the no-gold LongUserPolicyBench submission contract.
+  entrypoint: ultra_long_benchmark.cli:run-memory-submission-baseline
+  requires_llm_api: true
+  requires_gpu: false
+  memory_backend: graphiti
+data:
+  project_dir: examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_graphiti_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_graphiti_report.json
+evaluation:
+  mode: memory_submission_prediction_generation
+  adapter: graphiti
+  top_k: 8
+  metrics:
+    - project_release_micro_pass_rate
+    - evidence_recall
+    - boundary_action_recall
+    - diagnostic_label_counts
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 8
+  mem: 32G
+  time: "04:00:00"
+reproducibility:
+  seed: 0
+  deterministic: false
+  notes: Uses the hardened no-gold input pack. Requires method-specific temporal-KG runner, storage backend, provider/model configuration, and explicit --allow-llm-api / ALLOW_LLM_API=1 before execution.
+environment:
+  required:
+    - OPENAI_API_KEY
+  optional:
+    - ULB_OPENAI_BASE_URL
+    - NEO4J_URI
+    - NEO4J_USER
+    - NEO4J_PASSWORD

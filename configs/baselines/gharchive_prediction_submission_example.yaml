@@ -1,0 +1,30 @@
+baseline:
+  name: gharchive_prediction_submission_example
+  family: external_submission
+  description: Example offline scoring config for external project-level policy predictions.
+  entrypoint: ultra_long_benchmark.cli:score-project-predictions
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external
+data:
+  project_dir: examples/generated/projects/project_gharchive_001
+  predictions_path: examples/project_predictions/gharchive_prediction_examples.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_prediction_report.json
+evaluation:
+  mode: project_probe_prediction_submission
+  metrics:
+    - pass_rate
+    - must_include_recall
+    - must_not_violation_rate
+    - evidence_recall
+    - boundary_action_recall
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 2
+  mem: 8G
+  time: "00:20:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Scores JSONL predictions emitted by any external memory/agent method without invoking that method.

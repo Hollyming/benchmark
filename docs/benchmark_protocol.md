@@ -57,7 +57,7 @@ The offline smoke path must remain deterministic. Optional public-data or LLM-as
 | Temporal integrity | Events and sessions are timestamped, ordered, and timezone-explicit. | QC checks for ordering and malformed timestamps. |
 | Policy evidence linkage | Each probe cites sufficient positive evidence and relevant negative/obsolete/distractor evidence. | Query-to-event coverage table plus invalid-evidence counts. |
 | Capability coverage | All claimed capabilities appear in train/dev/test or are explicitly excluded. | Per-capability count table. |
-| Action boundary clarity | Expected behavior states allowed, forbidden, or clarification-required actions. | Must-include/must-not-include checks and boundary labels. |
+| Action boundary clarity | Expected behavior states allowed, forbidden, or clarification-required actions and reflects positive evidence action boundaries. | Must-include/must-not-include checks plus verifier `action_boundaries_present` and `action_boundaries_aligned`. |
 | Privacy handling | Sensitive facts are tagged and paired with channel/tool-specific boundary probes. | Privacy tag counts and leak-rate evaluation. |
 | Contamination control | Splits avoid duplicate trajectories, near-duplicate prompts, and source leakage. | Split manifest and deduplication notes. |
 | Annotation reliability | Human labels include instructions, adjudication rules, and agreement statistics. | Annotation template, IAA metrics, adjudication log. |
@@ -83,6 +83,8 @@ Recommended primary metrics:
 - `negative_example_suppression`: one-off examples are not stored or applied as durable habits.
 - `clarification_accuracy`: missing authorization leads to a question rather than action.
 - `evidence_recall`: required evidence event IDs are cited or retrieved.
+- `boundary_action_recall`: allowed, forbidden, approval, clarification, and tool boundary entries recovered from positive evidence.
+- `trace_boundary_violation_rate`: fraction of submitted action traces that violate forbidden actions/tools, approval requirements, clarification requirements, or authorized-tool constraints.
 - `memory_task_accuracy`: accuracy grouped by paper-facing task family.
 - `trajectory_stressor_coverage`: per-split counts for cross-tool workflows, distractors, policy updates, negative examples, privacy boundaries, and authorization gaps.
 
@@ -95,6 +97,28 @@ Before submitting results or releasing a dataset version:
 - Run `python -m ultra_long_benchmark.cli audit --json --output examples/generated/audit_report.json`.
 - Run `python -m ultra_long_benchmark.cli grounded-pilot`.
 - Run `python -m ultra_long_benchmark.cli github-fixture-pilot`.
+- Run `python -m ultra_long_benchmark.cli gharchive-pilot`.
+- Run `python -m ultra_long_benchmark.cli gharchive-quality-report --input tests/fixtures/gharchive_multi_repo_sample.jsonl --output examples/generated/gharchive_quality_report.json`.
+- Run `python -m ultra_long_benchmark.cli gharchive-window-report --input tests/fixtures/gharchive_window_sample.jsonl --window-days 7 --output examples/generated/gharchive_window_report.json`.
+- Run `python -m ultra_long_benchmark.cli gharchive-mine-candidates --input examples/source_fixtures/gharchive_public_events/project_gharchive_001.jsonl --repo acme/docs --output examples/generated/gharchive_candidate_report.json`.
+- Run `python -m ultra_long_benchmark.cli gharchive-annotation-pack --input examples/source_fixtures/gharchive_public_events/project_gharchive_001.jsonl --repo acme/docs --output-dir examples/generated/annotation_packs/gharchive_policy`.
+- Run `python -m ultra_long_benchmark.cli gharchive-annotation-pack-batch --input tests/fixtures/gharchive_multi_repo_sample.jsonl --output-dir examples/generated/annotation_packs/gharchive_batch`.
+- Run `python -m ultra_long_benchmark.cli export-annotation-pack-release examples/generated/annotation_packs/gharchive_batch --output-dir examples/generated/release_packaging/gharchive_annotation_pack`.
+- Run `python -m ultra_long_benchmark.cli gharchive-scale-summary examples/generated/annotation_packs/gharchive_batch --release-dir examples/generated/release_packaging/gharchive_annotation_pack --output examples/generated/gharchive_scale_summary.json`.
+- Run `python -m ultra_long_benchmark.cli validate-policy-rewrites examples/generated/annotation_packs/gharchive_policy/annotation_pack.json examples/annotation_rewrites/gharchive_rewrite_examples.jsonl --output examples/generated/annotation_packs/gharchive_policy/rewrite_validation.json`.
+- Run `python -m ultra_long_benchmark.cli build-project-from-rewrites examples/generated/annotation_packs/gharchive_policy/annotation_pack.json examples/annotation_rewrites/gharchive_rewrite_examples.jsonl --output-dir examples/generated/projects --project-id project_gharchive_rewrite_001`.
+- Run `python -m ultra_long_benchmark.cli gharchive-batch-pilot --input tests/fixtures/gharchive_multi_repo_sample.jsonl`.
+- Run `python -m ultra_long_benchmark.cli evaluate-project examples/generated/projects/project_manual_001 --output examples/generated/evaluation_harness/project_manual_baselines.json --top-k 3`.
+- Run `python -m ultra_long_benchmark.cli evaluate-project examples/generated/projects/project_gharchive_001 --output examples/generated/evaluation_harness/project_gharchive_baselines.json --top-k 3`.
+- Optionally run selected project baselines with repeated `--baseline`, for example `--baseline temporal_raw_rag`.
+- Run `python -m ultra_long_benchmark.cli score-action-traces examples/generated/projects/project_gharchive_001 examples/action_traces/gharchive_trace_examples.jsonl --output examples/generated/evaluation_harness/gharchive_action_trace_report.json`.
+- Run `python -m ultra_long_benchmark.cli validate-baseline-config configs/baselines --output examples/generated/evaluation_harness/baseline_config_validation.json`.
+- Run `python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/no_memory_project.yaml --output examples/generated/evaluation_harness/no_memory_config_run.json`.
+- Run `python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/raw_rag_project.yaml --output examples/generated/evaluation_harness/raw_rag_config_run.json`.
+- Run `python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/temporal_raw_rag_project.yaml --output examples/generated/evaluation_harness/temporal_raw_rag_config_run.json`.
+- Run `python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/gharchive_action_trace_scoring.yaml --output examples/generated/evaluation_harness/action_trace_config_run.json`.
+- Run `python -m ultra_long_benchmark.cli run-baseline-config-dir configs/baselines --output-dir examples/generated/evaluation_harness/baseline_batch`.
+- Dry-run gated external baselines with `python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/mem0_project_placeholder.yaml --dry-run --output examples/generated/evaluation_harness/mem0_dry_run.json` and the analogous A-MEM config.
 - Run `pytest` when the test dependency is installed.
 - Record package version, Python version, operating system, and dependency versions.
 - Publish configs, generation seeds, split manifests, dataset card, benchmark card, QC report, and audit report.

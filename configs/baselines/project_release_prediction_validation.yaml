@@ -1,0 +1,30 @@
+baseline:
+  name: project_release_prediction_validation
+  family: external_submission_validation
+  description: Validate a ProjectPrediction JSONL against the project benchmark release before scoring.
+  entrypoint: ultra_long_benchmark.cli:validate-project-prediction-submission
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external
+data:
+  project_dir: examples/generated/release_packaging/project_benchmark
+  predictions_path: examples/project_predictions/project_release_prediction_examples.jsonl
+  output_path: examples/generated/evaluation_harness/project_release_prediction_submission_validation.json
+evaluation:
+  mode: project_release_prediction_submission_validation
+  allow_partial: false
+  metrics:
+    - probe_coverage
+    - schema_validity
+    - duplicate_probe_count
+    - unknown_probe_count
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:05:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Run this before scoring external Mem0/A-MEM/custom ProjectPrediction JSONL files.

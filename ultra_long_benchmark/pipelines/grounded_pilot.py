@@ -264,6 +264,8 @@ def write_grounded_project(
     events: list,
     graph: MemoryGraph,
     probes: list[Probe],
+    construction: str = "manual_seed_reference_grounded_longitudinal_user_policy_pilot",
+    seed_path: str | None = None,
 ) -> Path:
     project_dir = output_dir / profile.project_id
     write_json(project_dir / "project_profile.json", profile)
@@ -277,9 +279,9 @@ def write_grounded_project(
             "project_id": profile.project_id,
             "source_streams": sorted({artifact.source_dataset for artifact in artifacts}),
             "artifact_count": len(artifacts),
-            "construction": "manual_seed_reference_grounded_longitudinal_user_policy_pilot",
+            "construction": construction,
             "llm_role": "none_in_seed; future stages may rewrite/bridge only with provenance",
-            "seed_path": str(DEFAULT_SEED_PATH),
+            "seed_path": seed_path or str(DEFAULT_SEED_PATH),
         },
     )
     return project_dir

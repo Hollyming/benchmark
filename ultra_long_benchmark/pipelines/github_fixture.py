@@ -18,7 +18,16 @@ def run_github_fixture_pilot(output_dir: Path) -> dict[str, Any]:
     profile = adapter_result.project_profile
     graph = build_github_fixture_memory_graph(profile.project_id)
     probes = synthesize_github_fixture_probes(profile.project_id)
-    project_dir = write_grounded_project(output_dir, profile, adapter_result.artifacts, adapter_result.events, graph, probes)
+    project_dir = write_grounded_project(
+        output_dir,
+        profile,
+        adapter_result.artifacts,
+        adapter_result.events,
+        graph,
+        probes,
+        construction="github_issue_ci_policy_fixture_pilot",
+        seed_path=str(DEFAULT_FIXTURE_PATH),
+    )
     return {
         "project_id": profile.project_id,
         "project_dir": str(project_dir),

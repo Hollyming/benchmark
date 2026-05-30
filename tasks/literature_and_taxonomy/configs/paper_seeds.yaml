@@ -34,6 +34,42 @@
     - contextual_policy_selection
     - workflow_boundary_respect
   notes: "Temporal KG baseline for dynamic enterprise memory; our benchmark adds deontic may/must/must-not action policy labels."
+- id: "locomo_2024"
+  title: "LoCoMo: Evaluating Long-Term Conversational Memory of Large Language Models"
+  year: 2024
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2402.17753"
+  capabilities:
+    - user_policy_induction
+    - policy_update_exception_handling
+  notes: "Important long-conversation memory QA benchmark; our setting moves from answer evidence to future tool-action policy."
+- id: "memorybank_2023"
+  title: "MemoryBank: Enhancing Large Language Models with Long-Term Memory"
+  year: 2023
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2305.10250"
+  capabilities:
+    - habit_generalization
+    - user_policy_induction
+  notes: "Early long-term user memory/profile direction; our benchmark requires executable work-policy boundaries."
+- id: "memoryarena_2026"
+  title: "MemoryArena: Benchmarking Memory-Augmented Agents in Long-Horizon Tasks"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2602.16313"
+  capabilities:
+    - workflow_boundary_respect
+    - tool_action_alignment
+  notes: "Agentic memory-action loop inspiration; our benchmark specializes the remembered experience into user-specific work policies."
+- id: "longmemeval_v2_2026"
+  title: "LongMemEval-V2: Towards Deeper Understanding and Evaluation of Agent Memory"
+  year: 2026
+  venue: "arXiv"
+  url: "https://arxiv.org/abs/2605.12493"
+  capabilities:
+    - contextual_policy_selection
+    - proactive_routine_recognition
+  notes: "Experienced-colleague memory benchmark with workflow/environment knowledge; our setting scores future tool-action boundaries rather than compact evidence QA."
 - id: "appworld_2024"
   title: "AppWorld: A Controllable World of Apps and People for Benchmarking Interactive Coding Agents"
   year: 2024

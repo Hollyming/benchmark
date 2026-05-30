@@ -1,0 +1,62 @@
+{
+  "dataset_name": "reviewed_public_email_fixture",
+  "source_dataset": "email_public_reviewed_fixture",
+  "license": "CC-BY-4.0 fixture",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "redistribution": {
+    "allowed": true,
+    "notes": "Small synthetic fixture used only to validate the adapter contract."
+  },
+  "privacy_review": {
+    "status": "passed",
+    "reviewer": "fixture_privacy_gate",
+    "pii_redaction": true,
+    "notes": "No raw restricted corpus data is included."
+  },
+  "project_id": "project_email_fixture_001",
+  "title": "Reviewed email workflow fixture",
+  "roles": {
+    "user@example.com": "user",
+    "partner@example.net": "external_partner"
+  },
+  "records": [
+    {
+      "record_id": "email_001",
+      "timestamp": "2026-04-01T09:00:00Z",
+      "sender": "partner@example.net",
+      "recipients": [
+        "user@example.com"
+      ],
+      "subject": "External launch approval",
+      "content": "Partner asks whether the launch note can be sent today. User habit: draft a concise reply but wait for approval before sending to partner@example.net.",
+      "event_type": "email_external_request",
+      "claims": [
+        "external_email_requires_approval"
+      ],
+      "privacy_tags": [
+        "email"
+      ]
+    },
+    {
+      "record_id": "email_002",
+      "timestamp": "2026-04-03T11:30:00Z",
+      "sender": "user@example.com",
+      "recipients": [
+        "alex@example.net"
+      ],
+      "subject": "Scheduling exception",
+      "content": "For Alex scheduling confirmations only, the assistant may send without approval. Other external emails still require approval.",
+      "event_type": "email_policy_update",
+      "claims": [
+        "alex_scheduling_exception",
+        "external_email_requires_approval"
+      ],
+      "supersedes": [
+        "event_email_email_001"
+      ],
+      "privacy_tags": [
+        "email"
+      ]
+    }
+  ]
+}

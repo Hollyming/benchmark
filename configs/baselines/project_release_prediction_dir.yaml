@@ -1,0 +1,31 @@
+baseline:
+  name: project_release_prediction_dir
+  family: external_submission_scoring
+  description: Score every ProjectPrediction JSONL in a directory against the project benchmark release.
+  entrypoint: ultra_long_benchmark.cli:score-project-release-prediction-dir
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external
+data:
+  project_dir: examples/generated/release_packaging/project_benchmark
+  predictions_dir: examples/project_predictions/release_submissions
+  output_path: examples/generated/evaluation_harness/prediction_scoring_batch/prediction_scoring_batch_report.json
+evaluation:
+  mode: project_release_prediction_submission_dir
+  system_name_prefix: external
+  metrics:
+    - micro_pass_rate
+    - probe_coverage
+    - diagnostic_label_counts
+    - task_type_macro_pass_rate
+    - capability_macro_pass_rate
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 2
+  mem: 8G
+  time: "00:20:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Place one ProjectPrediction JSONL per external method in predictions_dir; filenames become system names.
