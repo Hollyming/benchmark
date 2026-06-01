@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ultra_long_benchmark.pipelines.gharchive_pilot import select_gharchive_annotation_repos
+from ultra_long_benchmark.pipelines.gharchive import select_gharchive_annotation_repos
 from ultra_long_benchmark.shared.io import read_json
 
 

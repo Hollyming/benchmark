@@ -36,6 +36,7 @@ Do not mix private repository data, private issue exports, user email corpora, o
 
 ```bash
 python -m ultra_long_benchmark.cli discover-public-data --root /home/jmzhang/Workspace/data --output examples/generated/public_data_discovery_report.json
+python -m ultra_long_benchmark.cli verify-public-data-discovery examples/generated/public_data_discovery_report.json
 python -m ultra_long_benchmark.cli gharchive-rank-repos --input /home/jmzhang/Workspace/data/gharchive/2024-01 --output examples/generated/gharchive_repo_rank_report.json --limit 200 --min-events 5
 python -m ultra_long_benchmark.cli gharchive-build-slice /home/jmzhang/Workspace/data/gharchive/2024-01 --output /home/jmzhang/Workspace/data/gharchive/longuserpolicy_slice.jsonl --manifest /home/jmzhang/Workspace/data/gharchive/longuserpolicy_slice_manifest.json --max-records 200000 --max-records-per-source-file 4000
 python -m ultra_long_benchmark.cli gharchive-quality-report --input /home/jmzhang/Workspace/data/gharchive/longuserpolicy_slice.jsonl --output examples/generated/gharchive_quality_report.json
@@ -43,8 +44,8 @@ python -m ultra_long_benchmark.cli gharchive-window-report --input /home/jmzhang
 python -m ultra_long_benchmark.cli gharchive-stage-plan --input /home/jmzhang/Workspace/data/gharchive/longuserpolicy_slice.jsonl --profile paper --window-days 7 --output examples/generated/gharchive_stage_plan.json --allow-fail
 python -m ultra_long_benchmark.cli audit-workflow-data-sources --discovery-report examples/generated/public_data_discovery_report.json --gharchive-stage-plan examples/generated/gharchive_stage_plan.json --output examples/generated/workflow_data_source_audit.json
 INPUT=/home/jmzhang/Workspace/data/gharchive/longuserpolicy_slice.jsonl OUTPUT_ROOT=examples/generated bash scripts/run_gharchive_annotation_pipeline.sh
-python -m ultra_long_benchmark.cli verify-release-integrity examples/generated/release_packaging/gharchive_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_prompt_exports --output examples/generated/release_integrity_report.json
-python -m ultra_long_benchmark.cli assess-paper-scale examples/generated/release_packaging/gharchive_annotation_pack --profile paper --scale-summary examples/generated/gharchive_scale_summary.json --window-report examples/generated/gharchive_window_report.json --release-integrity-report examples/generated/release_integrity_report.json --output examples/generated/paper_scale_assessment.json --allow-fail
+python -m ultra_long_benchmark.cli verify-release-integrity examples/generated/release_packaging/gharchive_formal_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_formal_prompt_exports --output examples/generated/release_integrity_report.json
+python -m ultra_long_benchmark.cli assess-paper-scale examples/generated/release_packaging/gharchive_formal_annotation_pack --profile paper --scale-summary examples/generated/gharchive_formal_scale_summary.json --window-report examples/generated/gharchive_window_report.json --release-integrity-report examples/generated/release_integrity_report.json --output examples/generated/paper_scale_assessment.json --allow-fail
 ```
 
 `gharchive-build-slice` supports repeated `--repo owner/name`, `--max-records`, `--max-records-per-repo`, `--max-records-per-source-file`, and `--require-eligible-repo`. For hourly GHArchive directories, prefer `--max-records-per-source-file` over only `--max-records`; otherwise the slice may overrepresent the earliest sorted hours. The manifest records source files, selected record counts, repo counts, event-type counts, eligible repos, skipped repos, and the fact that no network download or LLM generation was performed.

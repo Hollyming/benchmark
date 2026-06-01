@@ -5,9 +5,9 @@ ROOT="${ROOT:-/home/jmzhang/Workspace/benchmark}"
 CONDA_ENV="${CONDA_ENV:-benchmark}"
 ADAPTER="${ADAPTER:?Set ADAPTER to mem0, a_mem, or graphiti}"
 SYSTEM_NAME="${SYSTEM_NAME:-${ADAPTER}_submission_placeholder}"
-INPUT_DIR="${INPUT_DIR:-${ROOT}/examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs_hardened}"
-PREDICTIONS="${PREDICTIONS:-${ROOT}/examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_${ADAPTER}_predictions.jsonl}"
-REPORT="${REPORT:-${ROOT}/examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_${ADAPTER}_plan.json}"
+INPUT_DIR="${INPUT_DIR:-${ROOT}/examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened}"
+PREDICTIONS="${PREDICTIONS:-${ROOT}/examples/generated/evaluation_harness/gharchive_formal_${ADAPTER}_predictions.jsonl}"
+REPORT="${REPORT:-${ROOT}/examples/generated/evaluation_harness/gharchive_formal_${ADAPTER}_plan.json}"
 
 cd "${ROOT}"
 source /home/jmzhang/miniconda3/etc/profile.d/conda.sh

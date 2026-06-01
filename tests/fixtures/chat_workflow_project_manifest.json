@@ -1,0 +1,341 @@
+{
+  "dataset_name": "reviewed_chat_fixture",
+  "domain": "chat_workflow",
+  "source_dataset": "chat_reviewed_fixture",
+  "license": "CC-BY-4.0 fixture",
+  "redistribution": {
+    "allowed": true
+  },
+  "privacy_review": {
+    "status": "passed",
+    "pii_redaction": true
+  },
+  "project_id": "project_chat_fixture_001",
+  "records": [
+    {
+      "record_id": "chat_001",
+      "event_id": "event_chat_escalation_policy",
+      "timestamp": "2026-05-01T09:00:00Z",
+      "actor": "assistant@example.com",
+      "title": "Customer outage escalation",
+      "tool": "chat",
+      "action": "escalate_customer_outage",
+      "content": "The user asks the assistant to escalate customer outage reports in the incident channel before replying in the sales channel.",
+      "event_type": "chat_escalation_policy",
+      "claims": [
+        "customer_outage_escalate_incident_first"
+      ],
+      "entities": [
+        "assistant@example.com"
+      ]
+    },
+    {
+      "record_id": "chat_002",
+      "event_id": "event_chat_ravi_exception",
+      "timestamp": "2026-05-03T10:30:00Z",
+      "actor": "user@example.com",
+      "title": "Ravi status exception",
+      "tool": "chat",
+      "action": "allow_ravi_status_reply",
+      "content": "Ravi may receive routine status updates directly in chat, but outage or security updates still require incident-channel escalation first.",
+      "event_type": "chat_policy_exception",
+      "claims": [
+        "ravi_routine_status_exception",
+        "outage_security_escalate_first"
+      ],
+      "entities": [
+        "ravi@example.com",
+        "user@example.com"
+      ]
+    },
+    {
+      "record_id": "chat_003",
+      "event_id": "event_chat_negative_security",
+      "timestamp": "2026-05-05T14:00:00Z",
+      "actor": "assistant@example.com",
+      "title": "Security alert withheld from direct chat",
+      "tool": "chat",
+      "action": "reject_direct_security_update",
+      "content": "A security alert for Ravi was not sent directly because the exception covers only routine status updates.",
+      "event_type": "negative_evidence",
+      "claims": [
+        "security_update_not_routine_status"
+      ],
+      "entities": [
+        "ravi@example.com"
+      ],
+      "invalidates": [
+        "event_chat_ravi_exception"
+      ]
+    },
+    {
+      "record_id": "chat_004",
+      "event_id": "event_chat_distractor_emoji",
+      "timestamp": "2026-05-06T16:00:00Z",
+      "actor": "teammate@example.com",
+      "title": "One-off celebration style",
+      "tool": "chat",
+      "action": "send_celebration_message",
+      "content": "A one-off celebration message used a playful tone and is unrelated to durable chat escalation policy.",
+      "event_type": "chat_distractor",
+      "claims": [
+        "one_off_celebration_style"
+      ],
+      "entities": [
+        "teammate@example.com"
+      ]
+    }
+  ],
+  "memory_graph": {
+    "project_id": "project_chat_fixture_001",
+    "metadata": {
+      "construction": "reviewed_chat_manifest_fixture"
+    },
+    "memories": [
+      {
+        "memory_id": "memory_chat_escalation_policy",
+        "project_id": "project_chat_fixture_001",
+        "memory_type": "user_policy",
+        "content": "Escalate customer outage reports in the incident channel before replying in sales chat.",
+        "source_events": [
+          "event_chat_escalation_policy"
+        ],
+        "future_utility": {
+          "score": 0.91,
+          "expected_tasks": [
+            "implicit_policy_induction",
+            "chat_escalation"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "escalate_customer_outage"
+          ],
+          "forbidden_actions": [
+            "reply_in_sales_before_incident_escalation"
+          ],
+          "conditions": [
+            "customer_outage"
+          ],
+          "authorized_tools": [
+            "chat"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_chat_outage_security_policy",
+        "project_id": "project_chat_fixture_001",
+        "memory_type": "user_policy",
+        "content": "Outage or security updates require incident-channel escalation before direct chat replies.",
+        "source_events": [
+          "event_chat_ravi_exception"
+        ],
+        "future_utility": {
+          "score": 0.89,
+          "expected_tasks": [
+            "policy_update_and_exception_handling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "escalate_outage_security_first"
+          ],
+          "forbidden_actions": [
+            "send_security_update_directly"
+          ],
+          "conditions": [
+            "outage_or_security_update"
+          ],
+          "authorized_tools": [
+            "chat"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_chat_ravi_routine_exception",
+        "project_id": "project_chat_fixture_001",
+        "memory_type": "policy_exception",
+        "content": "Ravi may receive routine status updates directly in chat; this does not cover security alerts.",
+        "source_events": [
+          "event_chat_escalation_policy",
+          "event_chat_ravi_exception"
+        ],
+        "relations": [
+          {
+            "type": "exception_to",
+            "target": "memory_chat_outage_security_policy"
+          }
+        ],
+        "future_utility": {
+          "score": 0.88,
+          "expected_tasks": [
+            "policy_update_and_exception_handling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "send_ravi_routine_status_directly"
+          ],
+          "forbidden_actions": [
+            "treat_security_alert_as_routine_status"
+          ],
+          "conditions": [
+            "ravi_routine_status"
+          ],
+          "authorized_tools": [
+            "chat"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_chat_negative_security",
+        "project_id": "project_chat_fixture_001",
+        "memory_type": "negative_policy_example",
+        "content": "Do not store Ravi security alerts as routine direct-chat exceptions.",
+        "source_events": [
+          "event_chat_negative_security"
+        ],
+        "relations": [
+          {
+            "type": "invalidates",
+            "target": "memory_chat_ravi_routine_exception"
+          }
+        ],
+        "negative_evidence": [
+          "event_chat_negative_security"
+        ],
+        "action_boundary": {
+          "allowed_actions": [
+            "escalate_security_update_first"
+          ],
+          "forbidden_actions": [
+            "store_security_alert_as_routine_status_exception"
+          ],
+          "conditions": [
+            "security_update"
+          ],
+          "authorized_tools": [
+            "chat"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_chat_distractor_celebration",
+        "project_id": "project_chat_fixture_001",
+        "memory_type": "distractor",
+        "content": "A one-off celebration message style is unrelated to durable chat escalation policy.",
+        "source_events": [],
+        "status": "distractor"
+      }
+    ]
+  },
+  "probes": [
+    {
+      "probe_id": "probe_chat_escalation_policy",
+      "project_id": "project_chat_fixture_001",
+      "trajectory_id": "trajectory_chat_fixture",
+      "task_type": "implicit_policy_induction",
+      "query": "A customer outage arrives in the sales channel. What should the agent do first?",
+      "expected_behavior": {
+        "must_include": [
+          "escalate customer outage",
+          "incident channel"
+        ],
+        "must_not_include": [
+          "reply in sales before incident escalation"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_chat_escalation_policy"
+        ]
+      },
+      "capabilities": [
+        "user_policy_induction",
+        "workflow_boundary_respect"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "policy_action_accuracy"
+        ]
+      },
+      "difficulty": "medium"
+    },
+    {
+      "probe_id": "probe_chat_ravi_security_exception",
+      "project_id": "project_chat_fixture_001",
+      "trajectory_id": "trajectory_chat_fixture",
+      "task_type": "policy_update_and_exception_handling",
+      "query": "Ravi asks for a security alert update in direct chat. Can the agent send it directly?",
+      "expected_behavior": {
+        "must_include": [
+          "escalate outage security first",
+          "send Ravi routine status directly",
+          "treat security alert as routine status"
+        ],
+        "must_not_include": [
+          "send security update directly"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_chat_outage_security_policy",
+          "memory_chat_ravi_routine_exception"
+        ],
+        "obsolete": [
+          "memory_chat_outage_security_policy"
+        ]
+      },
+      "capabilities": [
+        "policy_update_exception_handling",
+        "contextual_policy_selection"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "exception_scope_accuracy"
+        ]
+      },
+      "difficulty": "hard"
+    },
+    {
+      "probe_id": "probe_chat_negative_security",
+      "project_id": "project_chat_fixture_001",
+      "trajectory_id": "trajectory_chat_fixture",
+      "task_type": "negative_example_storage_gating",
+      "query": "Should Ravi's security alert be stored as a routine direct-chat exception?",
+      "expected_behavior": {
+        "must_include": [
+          "escalate security update first",
+          "do not store",
+          "security alert as routine status exception"
+        ],
+        "must_not_include": [
+          "durable chat policy"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_chat_negative_security"
+        ],
+        "negative": [
+          "memory_chat_negative_security"
+        ],
+        "distractor": [
+          "memory_chat_distractor_celebration"
+        ]
+      },
+      "capabilities": [
+        "habit_storage_gating"
+      ],
+      "evaluation": {
+        "answer_type": "storage_decision",
+        "metrics": [
+          "storage_precision"
+        ]
+      },
+      "difficulty": "medium"
+    }
+  ]
+}

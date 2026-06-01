@@ -348,9 +348,9 @@ Public / local reference traces
 
 |数据源/benchmark|可复用部分|适配方式|
 |---|---|---|
-|[Enron Email Dataset](https://www.cs.cmu.edu/~enron/)|约 150 个真实用户的长期邮件，公开且被大量研究使用|抽取回复风格、审批链、外部/内部邮件边界；必须做隐私清洗和敏感信息过滤|
+|[Enron Email Dataset](https://www.cs.cmu.edu/~enron/)|约 150 个真实用户的长期邮件，公开且被大量研究使用；原始 tarball 当前暂存在 `/home/jmzhang/Workspace/data/enron/enron_mail_20150507.tar.gz`|抽取回复风格、审批链、外部/内部邮件边界；必须做隐私清洗和敏感信息过滤。当前已生成 redacted derived manifest `/home/jmzhang/Workspace/data/enron/longuserpolicy_enron_email_manifest.json` 并通过 email-domain preflight，但这只是小规模预检，不是公开邮件 release claim。|
 |[Avocado Research Email Collection](https://catalog.ldc.upenn.edu/LDC2015T03)|279 个企业账号的邮件和附件，包含共享账号/会议室等组织上下文|构造 email/document workflow policy；需要 LDC license，不能默认公开再分发原文|
-|[GH Archive](https://www.gharchive.org/) / GitHub issues / PRs|公开 GitHub event timeline，含 issue、PR、review、comment、CI/Actions 相关事件；也可用 BigQuery 查询|抽取 reviewer routing、merge boundary、issue triage habit、CI-before-merge policy；当前代码已加入本地 GHArchive JSON/JSONL/gz adapter 和 verifier-checked `gharchive-pilot`|
+|[GH Archive](https://www.gharchive.org/) / GitHub issues / PRs|公开 GitHub event timeline，含 issue、PR、review、comment、CI/Actions 相关事件；也可用 BigQuery 查询|抽取 reviewer routing、merge boundary、issue triage habit、CI-before-merge policy；当前代码已加入本地 GHArchive JSON/JSONL/gz adapter、batch annotation pack、rewrite validation、project release 和 no-gold evaluation harness|
 |GHTorrent / GHArchive BigQuery|大规模 GitHub 行为流|构造跨月 developer workflow profiles；适合论文主实验规模化|
 |[AppWorld](https://arxiv.org/abs/2407.18901)|9 个日常 app、457 个 API、约 100 个模拟用户、750 个可执行任务|作为未来工具任务执行环境或 policy-conditioned task substrate；把用户历史层接到 AppWorld state tests 前面|
 |[WorkArena](https://arxiv.org/abs/2403.07718) / WorkArena++|ServiceNow 风格 enterprise web workflow|加入用户历史层，评估同一企业任务在不同用户策略下的不同正确行动|
@@ -360,7 +360,32 @@ Public / local reference traces
 |Persona2Web / LifeSim Eval|用户 persona、浏览偏好、长期个性化|借鉴 preference-conditioned future task，但扩展到多工具 action boundary|
 |Slack / Zulip / issue discussions|团队聊天、角色、请求、审批|抽取谁可授权、谁需 review、何时只是建议|
 
-当前仓库的状态要诚实表述：已经有 manual grounded seed 和 GitHub PR/CI fixture，可以保证 pipeline 不是“LLM 全流程凭空生成”；但尚未把 Enron/Avocado/GHArchive 大规模真实数据落入生成集。最优先的真实数据接入应是 GHArchive，因为它公开、低隐私风险、直接对应 tool-using developer agent 的 future actions，并且 PR/review/CI/merge 的 verifier 可以做得很强。
+当前仓库的状态要诚实表述：正式主线已经跑通 GHArchive benchmark release。最优先的真实数据接入仍是 GHArchive，因为它公开、低隐私风险、直接对应 tool-using developer agent 的 future actions，并且 PR/review/CI/merge 的 verifier 可以做得很强。Enron/email 当前只保留 redacted manifest 和 manifest-first preflight 能力作为未来域扩展入口；这些输出不属于当前正式 release artifact。由于原始企业邮件存在隐私和再分发风险，必须继续经过人工 privacy review、claim-boundary/readiness/artifact gate 后才能进入正式 multi-domain release claim。
+
+#### 7.2.1 域扩展状态与 Groundtruth 需求
+
+|域|当前状态|可复用数据 / 暂存位置|必须具备的 groundtruth / verifier 字段|当前证据与缺口|
+|---|---|---|---|---|
+|GitHub developer workflow|formal benchmark release ready|GH Archive 2024-01 slice：`/home/jmzhang/Workspace/data/gharchive/`；release：`examples/generated/release_packaging/gharchive_formal_project_benchmark`|PR/issue/review/CI/merge 的 source events；policy memory graph；`ActionBoundary` 中的 allowed / forbidden / requires approval；future probes 的 must-include、must-not、positive/negative/distractor evidence|30 repos / 168 probes；release、no-gold input、baseline、result tables、taxonomy/claim/readiness/artifact gates 已通过。|
+|Email workflow / Enron|manifest staged, not public release ready|CMU Enron tarball：`/home/jmzhang/Workspace/data/enron/enron_mail_20150507.tar.gz`；redacted manifest：`/home/jmzhang/Workspace/data/enron/longuserpolicy_enron_email_manifest.json`|邮件 thread/source pointer、sender/recipient/subject redaction、external/internal boundary、approval gate、narrow exception、privacy redaction boundary；negative evidence 和 distractor evidence；no-gold submission input 不能暴露 memory graph 或 expected behavior|manifest-first preflight codepath 和测试 fixture 已保留；当前正式 artifact 集不保留 email preflight 输出。仍需人工隐私审查、更大 sample、domain-specific claim/readiness/artifact gate。|
+|Calendar workflow|manifest-first adapter contract ready, not real release|checked-in fixture：`tests/fixtures/calendar_workflow_project_manifest.json`|availability windows、deep-work blocks、reschedule rules、attendee/role authorization、approval/clarification boundary；future task expected order and forbidden scheduling actions|fixture preflight path covered by tests；仍缺真实可复用长期 calendar traces 和 source audit。|
+|Docs workflow|manifest-first adapter contract ready, not real release|`tests/fixtures/docs_workflow_project_manifest.json`|document revision/review/share artifacts；reviewer routing、approval-before-share、sensitive section redaction；must-not include unapproved share/publish actions|fixture preflight path covered by tests；仍缺真实 reusable docs/revision traces。|
+|Chat workflow|manifest-first adapter contract ready, not real release|`tests/fixtures/chat_workflow_project_manifest.json`|thread messages、role authority、escalation/notification policy、privacy boundary；negative examples for one-off urgent chat behavior|fixture preflight path covered by tests；仍缺 reviewed Slack/Zulip/Teams-style reusable traces。|
+|Browser/web-search workflow|manifest-first adapter contract ready, not real release|`tests/fixtures/browser_web_workflow_project_manifest.json`|search/browse/click/form artifacts；source reliability preference、purchase/share/submit authorization, web action boundary；tool-action traces for stateful evaluation|fixture preflight path covered by tests；仍缺 real reusable browser traces and stronger executable verifier.|
+|AppWorld / WorkArena / tau-bench substrate|planned integration|external task environments, not yet staged as LongUserPolicyBench release data|state-based tool success plus user-history-derived policy graph；collateral damage, approval, forbidden action, clarification groundtruth|planned; adapter should inject longitudinal user policy before existing executable tasks.|
+
+#### 7.2.2 当前正式数据集构建状态
+
+当前已经正式跑通的是 **GHArchive / GitHub developer workflow** 单域 release。该域不是临时 demo，也不是全流程生成数据；它复用 GH Archive 2024-01 公开 GitHub event stream：
+
+- 原始数据：`/home/jmzhang/Workspace/data/gharchive/2024-01/`，60 个 hourly `.json.gz` 文件，约 5.1GB。
+- 构建 slice：60,000 条公开 workflow events、28,069 repos、340 eligible repos、283 eligible time windows、19,709 deterministic policy candidates。
+- 正式 release：30 repos / 168 verifier-checked probes，repo-disjoint train/dev/test = 102/37/29。
+- 当前 release scope：`github_developer_workflow_only`，覆盖 4 个 task types 和 5 个 capability enum values；不能声称已经覆盖 email/calendar/docs/chat/browser/web-search 多域办公工作流。
+- 主 release 路径：`examples/generated/release_packaging/gharchive_formal_project_benchmark`。
+- no-gold submission input：`examples/generated/evaluation_harness/gharchive_formal_submission_inputs`；hardened no-gold input：`examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened`。
+- release gate evidence：readiness、taxonomy coverage、claim-boundary、claim lint、artifact bundle、domain expansion readiness 和 baseline config validation 均已接入 `benchmark-release-gate-report`。
+- Enron/email 当前只有 redacted manifest 和 manifest-first preflight 能力；它证明非 GitHub 域的工程桥接路径可行，但尚未通过人工 privacy review 与正式 release gate，因此不是 public email release claim，也不保留在当前 formal generated artifact 集中。
 
 ### 7.3 Pipeline 细化
 
@@ -443,7 +468,7 @@ Verifier 必须过滤掉伪难题：
 - Shortcut check：不看历史不能显然回答。
 - Semantic distractor hardness：distractor 与目标相似但条件不同。
 
-当前代码已实现第一版 `TASK_CONTRACTS`、`task_contracts_valid` 和 `action_boundaries_present`。下一步应把 verifier 从字段存在性推进到 action-level execution trace validation，例如检查 agent 最终工具调用是否包含 forbidden action。
+当前代码已实现第一版 `TASK_CONTRACTS`、`task_contracts_valid` 和 `action_boundaries_present`。同时 `score-action-traces` 已提供 action-level execution trace validation，可检查最终工具调用中的 forbidden action、forbidden/unauthorized tool、missing approval 和 missing clarification。下一步应把真实外部 agent trace 接入这个 scorer，并在 runner 输出层保留 approval/clarification 标记。
 
 ---
 
@@ -524,6 +549,17 @@ LongUserPolicyBench/
 |Stale Policy Reuse Rate|使用被更新/被限定旧策略的比例|
 |Evidence Faithfulness|行动理由是否被历史 evidence 支撑|
 
+当前工程实现里，Layer 2 已经落到 release-level `ProjectPrediction` scoring：`micro_pass_rate`、`micro_evidence_recall`、`micro_boundary_action_recall`、`micro_must_include_recall`、`micro_must_not_violation_rate`、by-task/by-capability breakdown、diagnostic failure labels，以及 project-level bootstrap confidence intervals。原始 no-gold input 的 probe wording 存在 lexical shortcut 风险，因此外部系统默认应使用 hardened no-gold input；原始 vs hardened 的差异应作为敏感性分析报告。
+
+当前 GHArchive release 的已跑 baseline / contract rows 包括：
+
+- deterministic baselines：`no_memory`、`full_event_log`、`raw_rag`、`temporal_raw_rag`、`oracle_policy_graph`。
+- no-gold harness sanity baseline：`memory_submission_event_profile_stub` 与 hardened variant；它证明 submission/scoring harness 可用，不作为 SOTA claim。
+- OpenAI-compatible method-style prompt adapters：A-MEM / Mem0 / Graphiti over hardened input with `gpt-5.4-mini`；它们是方法风格 adapter，不是 upstream package runner result。
+- executed external runner contract：`external_echo_runner_contract`，只证明插件 I/O contract 可执行，不是能力 baseline。
+
+当前还没有完成 upstream A-MEM / Mem0 / Graphiti package baseline。正式报告这些横向方法前，必须提供 method-specific runner、依赖/版本锁、存储或 provider 配置、Slurm 资源脚本，并输出标准 `ProjectPrediction` JSONL 后再进入同一 scoring path。
+
 ### 9.3 Memory-Isolated Score
 
 为了避免测成 reader 或工具执行能力：
@@ -546,506 +582,43 @@ Memory-Isolated Policy Score = Fixed Tool Planner using memory system output
 
 ---
 
-## 10. MVP 构建方案
+## 10. 后续多域扩展路线
 
-MVP 不应从 100M token 开始，而应证明新能力定义成立。
+当前不再把工作定义成早期 smoke；主线是正式 benchmark release 逐域扩展。GHArchive/GitHub developer workflow 是第一个 release-ready 域。后续每个域必须按同一证据链进入 release，而不是只加 fixture 或 prompt：
 
-建议规模：
+1. **Reusable trace source**：确认数据来源、license、redistribution、privacy review、PII redaction。
+2. **Canonical event adapter**：把原始记录归一化为 `SourceArtifact`、`CanonicalEvent`、policy memory graph 和 future probes。
+3. **Domain verifier**：检查 evidence grounding、positive/negative/distractor evidence、action boundary、exception scope、authorization/clarification、no gold leakage。
+4. **No-gold submission input**：外部方法只拿 artifacts/events/probes，不拿 memory graph、expected behavior 或 gold evidence ids。
+5. **Baseline / runner contract**：deterministic baselines、memory-system runner、prediction validation、release scoring 全部走同一 `ProjectPrediction` JSONL 接口。
+6. **Release gates**：taxonomy coverage、claim-boundary、claim lint、artifact bundle、domain-expansion readiness、benchmark-release gate 全部通过后，才能把该域写入 release claim。
 
-- 50 users/workspaces。
-- 每个 user 5-8 source streams：email、calendar、docs、chat、issue/PR、browser/files、forms。
-- 每个 user 3-6 个月轨迹，50K-300K tokens。
-- 每个 user 50-100 future tool tasks。
-- 总计 2.5K-5K probes。
+优先扩展顺序：
 
-能力分布：
+|优先级|域|当前状态|进入正式 release 的阻断|
+|---|---|---|---|
+|1|Email / Enron|redacted preflight 已通过 1 project / 3 probes|人工 privacy review、更大 reviewed manifest、email-domain verifier、正式 release gate 集成|
+|2|Calendar / docs / chat|manifest-first fixture contract 已通过|真实可复用长期 traces、license/privacy manifest、domain verifier 和 no-gold input|
+|3|Browser / web-search / files|manifest-first fixture contract 已通过|真实 browser/file traces、可执行或强 verifier、授权/支付/提交边界|
+|4|AppWorld / WorkArena / tau-bench substrate|planned|把长期用户策略层接入已有 state-based tool task，并保留 collateral damage / forbidden action groundtruth|
 
-|Task|占比|
-|---|---|
-|Implicit policy induction|15%|
-|Habit generalization|15%|
-|Policy update / exception|15%|
-|Tool action boundary|15%|
-|Routine ordering|10%|
-|Negative example gating|10%|
-|Privacy / authorization|10%|
-|Cross-tool composition|10%|
-
-优先接入数据：
-
-1. GitHub Archive / GH issue/PR/CI fixture：容易 reference-grounded，权限风险低。
-2. AppWorld-style apps：可执行 API，适合 future tool task。
-3. Enron/Avocado email：长期邮件风格和审批链，但要做隐私清洗。
-4. WorkArena / WebArena / Mind2Web：补 web/browser workflow。
-5. LLM 生成 bridging sessions 和 future tasks，但不生成核心 evidence。
+推荐正式规模目标仍是 50 users/workspaces、每个 user 5-8 source streams、3-6 个月轨迹、50-100 future tool tasks，总计 2.5K-5K probes。但这个目标是扩展路线，不是当前 GHArchive 单域 release 的状态描述。
 
 ---
 
-## 11. 当前工程状态（2026-05-30）
-
-当前仓库已经切换到 **longitudinal user policy / habit induction** scaffold。现阶段已接入的是 reference-grounded manual fixtures、GitHub PR/CI fixture、verifier-checked GHArchive public-event fixture，以及真实 GHArchive 公共事件 slice。真实 GHArchive 路线已经完成从 annotation pack、LLM rewrite、rewrite verifier、project synthesis、project release、no-gold submission input、deterministic baseline、paper table 到 readiness report 的闭环；最新产物是 30-repo / 168-probe 的 paper-candidate release。
-
-需要诚实限定：当前 paper-candidate release 是 **GitHub developer workflow domain**，不是 email/calendar/docs/chat/browser 的全域个人办公 release。Enron/Avocado 邮件语料尚未通过 license/privacy manifest gate，因此不能声称已复用真实企业邮件工作流。
-
-数据 staging 根目录已切到 `/home/jmzhang/Workspace/data`。当前已从 GH Archive 公共 GitHub event stream 下载 2024-01 的 60 个 hourly `.json.gz` 文件，原始数据约 5.1GB，位置为 `/home/jmzhang/Workspace/data/gharchive/2024-01/`；并构建了 `/home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_pilot_slice.jsonl` 和 manifest。该 slice 含 60,000 条真实公开 GitHub workflow events、28,069 个 repo、340 个 eligible repo、283 个 eligible time windows、19,709 个 deterministic policy candidates；`gharchive-stage-plan --profile pilot` 已通过并给出 `ready_for_annotation_budget=true`。因此当前已经复用了权威真实 workflow 数据，不是全流程纯生成。
-
-已保留的 5-repo 真实 LLM pilot 结果：
-
-- 选择 5 个 eligible repo：`microsoft/winget-pkgs`、`NixOS/nixpkgs`、`openshift/release`、`odoo/odoo`、`llvm/llvm-project`。
-- 构造 5 个 annotation packs，共 29 个 source-grounded tasks。
-- 用 OpenAI-compatible `gpt-5.5`、`reasoning_effort=xhigh` 生成 29/29 rewrite proposals；API key 只通过环境变量传入，未写入仓库文件。
-- `collect-policy-rewrite-job-outputs` 通过：3 个 rewrite jobs、29 proposals、0 issues。
-- `validate-policy-rewrites-batch` 通过：5/5 packs、29/29 proposals。
-- `build-projects-from-rewrite-batch` 通过：5/5 verifier-checked projects。
-- project benchmark release：`examples/generated/release_packaging/gharchive_real_llm_project_benchmark`，5 projects、29 probes、70 events。
-- no-gold submission input：`examples/generated/evaluation_harness/gharchive_real_llm_submission_inputs`，验证无 gold leakage。
-- release deterministic baseline sanity check：`no_memory` boundary recall 为 0，`oracle_policy_graph` boundary recall 为 1，说明 probe 不是空壳。
-- `readiness-report --paper-scale-profile pilot` 通过：19 checks、0 fail、2 warnings。两个 warning 是预期的：pilot 只有 5 repo 导致 test split 为空；email workflow manifest 仍缺失。
-
-为了避免 5-repo pilot 的 split 偶然性，已新增并完成 pilot-plus selection gate：
-
-- `gharchive-select-annotation-repos` 从当前 340 个 eligible repos 中确定性选择 15 个 repo，split 为 train/dev/test = 9/3/3。
-- pilot-plus annotation release：`examples/generated/release_packaging/gharchive_real_pilot_plus_annotation_pack`，15 packs、88 tasks，task split 为 train/dev/test = 53/17/18。
-- pilot-plus prompt exports：`examples/generated/annotation_packs/gharchive_real_pilot_plus_prompt_exports`。
-- pilot-plus rewrite jobs：`examples/generated/annotation_packs/gharchive_real_pilot_plus_rewrite_jobs`，9 jobs、88 prompts、约 131k estimated prompt tokens。
-- 88/88 LLM rewrite proposals 已生成、收集并通过 `validate-policy-rewrites-batch`。
-- 15/15 rewrite-derived projects 已生成并通过 project verifier。
-- pilot-plus project release：`examples/generated/release_packaging/gharchive_real_llm_pilot_plus_project_benchmark`，15 projects、88 probes、208 events，train/dev/test probe split = 53/17/18。
-- pilot-plus no-gold submission input：`examples/generated/evaluation_harness/gharchive_real_llm_pilot_plus_submission_inputs`，验证无 gold leakage。
-- release deterministic baseline sanity check：`no_memory` boundary recall 为 0，`oracle_policy_graph` boundary recall 为 1。
-- `verify-project-benchmark-release` 通过：0 issues、0 warnings。
-- `readiness_report_real_llm_pilot_plus.json` 通过：19 checks、0 fail、1 warning。剩余 warning 是 email workflow manifest 仍缺失。
-
-最新 paper-candidate release 已完成：
-
-- `gharchive-select-annotation-repos` 从 340 个 eligible repos 中确定性选择 30 个 repo，repo split 为 train/dev/test = 18/7/5。
-- paper-candidate annotation release：`examples/generated/release_packaging/gharchive_real_paper_candidate_annotation_pack`，30 packs、168 tasks，task split 为 train/dev/test = 102/37/29。
-- prompt exports：`examples/generated/annotation_packs/gharchive_real_paper_candidate_prompt_exports`。
-- rewrite jobs：`examples/generated/annotation_packs/gharchive_real_paper_candidate_rewrite_jobs`，17 jobs、168 prompts、约 249k estimated prompt tokens。
-- 用 OpenAI-compatible `gpt-5.5`、`reasoning_effort=xhigh` 生成 168/168 rewrite proposals；生成中出现的空 content/timeout 类失败已通过 failed-prompt retry 和 `--merge-existing` 补齐，API key 只通过环境变量传入，未写入仓库文件。
-- `collect-policy-rewrite-job-outputs` 通过：17/17 jobs、168 proposals、0 issues、0 warnings。
-- `validate-policy-rewrites-batch` 通过：30/30 packs、168/168 proposals。
-- `build-projects-from-rewrite-batch` 通过：30/30 verifier-checked projects。
-- project benchmark release：`examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark`，30 projects、168 probes，train/dev/test probe split = 102/37/29。
-- no-gold submission input：`examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs`，验证通过且无 gold leakage。
-- `verify-project-benchmark-release` 通过：0 issues、0 warnings。
-- release deterministic baseline sanity check：`no_memory` boundary-action recall 为 0，`oracle_policy_graph` boundary-action recall 为 1.0；raw/full-event baselines 能召回 evidence，但会出现 `retrieved_but_not_applied`、`overbroad_exception`、`negative_example_stored` 等 policy-action failure label。
-- paper tables：`examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_paper_tables`，包含 main results、task/capability breakdown、failure breakdown 和 project bootstrap confidence intervals；当前表格包含 6 个系统：`no_memory`、`full_event_log`、`raw_rag`、`temporal_raw_rag`、`oracle_policy_graph`、`memory_submission_event_profile_stub`。
-- 新增 no-gold memory submission contract baseline：`memory_submission_event_profile_stub` 读取 `examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs`，产出 `examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_memory_profile_stub_predictions.jsonl`，覆盖 168/168 probes；submission validation 通过，0 issues、0 warnings；release scoring 为 `micro_pass_rate=0.881`、`micro_evidence_recall=0.8635`、`micro_boundary_action_recall=0.9968`。该 baseline 是 harness sanity check，不是 SOTA claim。
-- baseline config batch 已更新为 16 个配置：11 个离线配置执行完成，5 个外部/API 方法 dry-run，0 blocked、0 failed；新增 gated placeholders：`mem0_submission_placeholder.yaml`、`a_mem_submission_placeholder.yaml`、`graphiti_submission_placeholder.yaml`。
-- human audit sampling pack：`examples/generated/annotation_packs/gharchive_real_paper_candidate_human_audit`，从 168 条 validated LLM proposals 中确定性抽样 30 条，candidate type 分布为 authorization boundary 8、contextual policy 5、issue triage policy 13、negative policy example 4；当前已导出 `audit_items.jsonl` 和 `audit_decisions_template.jsonl`，等待人工 reviewer 填写 `audit_decisions.jsonl` 后运行 `validate-policy-rewrite-human-audit`。
-- `readiness_report_real_llm_paper_candidate.json` 在使用 hardened no-gold submission input 时通过：21 checks、0 fail、2 warnings。两个 warning 是：email workflow manifest 仍缺失；human audit decisions 仍缺失。原始 probe leakage audit 仍作为分析诊断保留：44/168 个原始 probes 与 expected/action-boundary 词面重合度较高；hardened no-gold submission input 已将 high-overlap probes 降到 0/168。
-
-一个重要工程发现：GHArchive hourly `.json.gz` 是 JSONL gzip，不是单个 JSON object；pipeline 已修复为流式读取，避免 `json.load` 导致多 GB 内存膨胀。另一个真实数据发现是 PushEvent 会淹没 PR/review 事件，因此 slice 构建已默认排除 PushEvent；质量门槛从“必须有 CI/status”调整为 `execution_boundary`，即 CI/status/workflow 是强子类，PR closed/merged/revert/blocked 等也可作为公开事件中可观测的执行边界。
-
-已完成：
-
-1. Capability enum 更新为：
-   - `user_policy_induction`
-   - `habit_generalization`
-   - `contextual_policy_selection`
-   - `tool_action_alignment`
-   - `workflow_boundary_respect`
-   - `policy_update_exception_handling`
-   - `proactive_routine_recognition`
-   - `privacy_authorization_boundary`
-   - `habit_storage_gating`
-   - `abstention_clarification`
-
-2. Smoke generator 更新为跨工具用户工作流：
-   - external email approval policy
-   - calendar deep-work habit
-   - roadmap doc review chain
-   - customer-visible bug issue policy
-   - Alex narrow exception
-   - lunch poll negative habit example
-   - docs PR / CI boundary
-   - private phone authorization boundary
-   - paid travel authorization gap
-   - screenshot/file naming habit
-
-3. Query generator 生成 11 类 future tool policy probes，每个 persona 11 条。
-
-4. Grounded pilot 改为 reference-grounded user policy seed：email、calendar、docs、issue、chat policy update、negative example、privacy boundary。
-
-5. GitHub fixture 改为 PR/CI policy induction：summary comment、Nina review、CI-before-merge、pre-CI human emergency negative example。
-
-6. 新增 GHArchive 本地事件 adapter：
-   - 读取 `.jsonl`、`.json` 或 `.json.gz` 的公开 GitHub event slice。
-   - 可按 repo 和 actor 过滤。
-   - 将 PR、review、issue/comment、CI/status、workflow run、push 等事件规范化成 `SourceArtifact` 和 `CanonicalEvent`。
-   - 该 adapter 不联网，后续可直接接 `/home/jmzhang/Workspace/data/gharchive/` 或 BigQuery 导出的 GHArchive 片段。
-
-6.1 新增 `gharchive-build-slice`：
-   - 输入本地 GHArchive 文件或目录，输出统一 JSONL slice 和 manifest。
-   - 支持 `--repo`、`--max-records`、`--max-records-per-repo`、`--max-records-per-source-file`、`--require-eligible-repo`。
-   - manifest 记录 source files、records scanned/selected、repo/event type counts、eligible/skipped repos，以及 `network_download_performed=false`、`llm_generation_allowed=false`。
-   - 解决真实 GHArchive 常见的“多小时 `.json.gz` 目录 -> 可复现实验 slice”问题。
-
-7. 新增 `gharchive-pilot`：
-   - 默认 fixture 位于 `examples/source_fixtures/gharchive_public_events/project_gharchive_001.jsonl`。
-   - 生成 `project_gharchive_001`，覆盖 summary comment、Nina review、CI-before-merge、human emergency negative example。
-   - 输出通过 project verifier。
-
-8. 新增 `gharchive-batch-pilot`：
-   - 从本地 GHArchive-style event slice 自动发现 repo。
-   - 每个 repo 独立生成 verifier-checked project。
-   - 当前要求 repo slice 至少包含 PR/review、execution-boundary、negative-boundary evidence；CI/status/workflow 是强 execution-boundary subtype，PR closed/merged/revert/blocked 信号也可作为公开 GHArchive 中可观测的执行边界。
-
-9. 新增 `gharchive-quality-report`：
-   - 在 batch 生成前统计每个 repo 的 PR/review/CI/execution-boundary/merge/negative-boundary 信号，同时保留 emergency-negative subtype 计数。
-   - 输出 eligible/skipped 和缺失原因。
-   - batch 生成现在默认只处理 eligible repo；若没有 eligible repo 会显式失败。
-
-10. 新增 `gharchive-window-report`：
-   - 对本地 GHArchive-style event slice 按 repo 内部时间锚点切成 N 天窗口。
-   - 统计每个窗口的 PR/review/execution-boundary/negative-boundary 信号、eligible 状态和缺失原因。
-   - 输出哪些 repo 跨多个窗口、哪些窗口真的含有完整策略证据，用来避免把单日 burst 误当作长期习惯。
-
-11. 新增 `gharchive-mine-candidates`：
-   - 从本地 GHArchive-style event slice 中 deterministic 挖掘 policy candidates。
-   - 当前覆盖 summary-comment review routing、CI-before-merge 或 execution-boundary authorization boundary、issue label/assignee triage routing、emergency/pre-CI 或 blocked/do-not-merge/failed/revert negative-boundary storage gating。
-   - 每条候选包含 supporting events、negative events、action boundary、confidence 和 mining rule；这些是后续 LLM-assisted rewrite/probe generation 的输入，而不是让 LLM 发明 gold facts。
-
-12. 新增 `gharchive-annotation-pack`：
-   - 将 mined policy candidates 打包成离线 annotation tasks。
-   - 每个 task 包含 supporting/negative evidence snippets、raw pointer、content hash、action boundary candidate、LLM instructions、human review checklist 和 verifier expectations。
-   - 这是后续 LLM-assisted rewrite/probe generation 的前置 gate：LLM 只能改写或起草 probe，不能新增 event、扩展 action boundary 或把 negative example 写成 durable habit。
-
-13. 新增 `gharchive-annotation-pack-batch`：
-   - 对本地 GHArchive slice 中所有 eligible repo 批量生成 rewrite-ready annotation packs。
-   - 复用 PR/review/execution-boundary/negative-boundary quality gate；不满足信号要求的 repo 会进入 skipped report。
-   - 输出每个 repo 的 pack 路径、candidate/task 数、candidate type 分布，用于后续人工/LLM 分批处理。
-
-14. 新增 `export-annotation-pack-release`：
-   - 将 batch annotation packs 导出成 release skeleton。
-   - 输出 `release_manifest.json`、`splits.json`、`tasks/{train,dev,test,all}.jsonl`。
-   - split 以 repo 为单位，避免同一 repo 的工作流 policy 泄漏到多个 split；manifest 记录 pack hash、skipped repo 和 LLM 约束。
-
-15. 新增 `gharchive-scale-summary` 和集群脚本：
-   - 汇总 batch/release 的 eligible repo、skipped repo、tasks per pack、candidate type、split counts 和 LLM 约束。
-   - `scripts/run_gharchive_annotation_pipeline.sh` 串联 quality report、window report、batch packs、release export 和 scale summary。
-   - `scripts/slurm/run_gharchive_annotation_pipeline.sbatch` 提供 CPU 分区可复现实验入口；通过 `INPUT`、`OUTPUT_ROOT`、`WINDOW_DAYS`、`CONDA_ENV` 覆盖。
-   - `docs/gharchive_staging_protocol.md`、`scripts/prepare_gharchive_slice.sh`、`scripts/slurm/prepare_gharchive_slice.sbatch` 提供真实 GHArchive slice 的 staging/build/quality/candidate 预检查入口；默认只消费本地文件，不在离线 smoke path 中联网下载。
-
-16. 新增 `validate-policy-rewrites`：
-   - 校验 LLM/人工 rewrite/probe proposals 是否完全受 annotation pack 约束。
-   - 拒绝 invented event ids、越界 action boundary、缺失 negative evidence、以及未覆盖 allowed/forbidden action terms 的弱 expected behavior。
-   - 支持 `--allow-partial` 用于调试分批标注；release batch 默认要求每个 annotation task 都有 proposal。
-
-17. 新增 `export-policy-rewrite-prompts`：
-   - 从 `annotation_pack.json` 导出 provider-agnostic JSONL prompt records。
-   - 每条 prompt 包含 system/user prompt、supporting/negative evidence、allowed event ids、output schema、action-boundary constraints 和后续 validator command。
-   - 该步骤不调用 LLM API；它只是把 LLM-assisted generation 的输入固定下来，确保生成前后的 provenance 可审计。
-   - `export-policy-rewrite-prompts-batch` 对 batch annotation packs 批量导出每个 repo 的 prompt JSONL 和 batch report，是真实 GHArchive 多 repo 后的标注输入准备入口。
-
-18. 新增 `build-project-from-rewrites`：
-   - 将通过 `validate-policy-rewrites` 的 proposals 转成 project-level `MemoryGraph` 和 future `Probe`。
-   - 自动保留原始 GHArchive evidence snippets 为 artifacts/events，并写入 rewrite project manifest。
-   - 生成后立即可由标准 project verifier 检查 grounding、task contracts、negative/distractor evidence 和 action-boundary alignment。
-
-19. 新增 `EmailWorkflowAdapter` skeleton：
-   - 面向后续 Enron/Avocado-style email trajectories。
-   - 采用 manifest-first：必须声明 dataset、license、redistribution、privacy review、PII redaction 和 records。
-   - unknown license、不可重分发、未通过隐私审查或未声明 PII redaction 的邮件数据会在 adapter 层拒绝加载。
-   - 默认对邮件 header/body 做 redaction，并把 privacy tags 写入 artifact/event metadata。
-
-20. Verifier contract 改为 policy/habit task contract：检查 memory type、negative evidence、distractor、future utility、source coverage。
-   - 新增 `action_boundaries_aligned` 检查：probe 的 expected behavior 必须反映 positive evidence 中的 action boundary；若存在 forbidden action、approval 或 clarification requirement，也必须在 expected behavior 中被覆盖。
-
-21. 新增 project-level deterministic baselines：
-   - `no_memory`：不读取用户历史或记忆，是 lower-bound clarification baseline。
-   - `full_event_log`：暴露完整 chronological raw event log，但不提供 induced policy graph。
-   - `raw_rag`：只从 raw canonical events 做 lexical top-k retrieval，不读取 gold memory graph。
-   - `temporal_raw_rag`：在 raw retrieval 上加入 recency / policy-update bonus，检验时间更新和 stale-policy stressor。
-   - `oracle_policy_graph`：使用 gold memory graph、action boundary 和 source evidence，作为 upper-bound sanity check。
-   - `evaluate-project` 输出 must-include recall、must-not violation rate、evidence recall、boundary-action recall 和逐 probe prediction。
-
-22. 新增 action-execution trace scoring：
-   - `TraceAction` / `ActionTrace` 模型表示 agent 实际工具调用序列。
-   - `score-action-traces` 按 probe positive/negative evidence 的 action boundary 打分。
-   - 输出 pass rate、boundary violation rate、allowed-action coverage、forbidden action/tool violation、missing approval/clarification、unauthorized tool use。
-   - 已加入 GHArchive 示例 trace：一条 docs PR 合规流程，一条 pre-CI merge violation。
-
-23. **Action boundary schema 已显式化**
-   - `ActionBoundary` 支持 allowed/forbidden actions、conditions、exceptions、approval/clarification requirements、authorized/forbidden tools。
-   - Manual grounded pilot 和 GitHub fixture 均已写入 action boundary。
-   - Verifier 新增 `action_boundaries_present` 检查，防止 policy memory 只有自然语言描述。
-
-24. 新增 baseline config runner 和 Slurm 入口：
-   - `configs/baselines/` 当前包含 `no_memory_project`、`full_event_log_project`、`raw_rag_project`、`temporal_raw_rag_project`、`oracle_policy_graph`、`gharchive_action_trace_scoring`、`gharchive_prediction_submission_example`、`mem0_project_placeholder`、`a_mem_project_placeholder`。
-   - `validate-baseline-config` 检查 schema、GPU/LLM/API gate、metrics、资源声明和可选路径存在性。
-   - `run-baseline-config` 只执行确定性的仓库内 baseline；Mem0/A-MEM 当前只能 dry-run，避免在没有 runner、依赖锁定和 API/model credentials 时误启动。
-   - `run-baseline-config-dir` 批量执行配置目录：deterministic configs 真实执行，LLM/API configs 默认 dry-run。
-   - `scripts/run_baseline_config_batch.sh` 和 `scripts/slurm/run_baseline_config_batch.sbatch` 提供本地/集群批量入口。
-   - `scripts/slurm/run_project_baseline.sbatch` 和 `scripts/slurm/run_action_trace_scoring.sbatch` 默认使用 `CONDA_ENV=benchmark`，可在 debug/RTX4090/ADA6000 分区上覆盖资源。
-
-25. 新增 `readiness-report`：
-   - 汇总 smoke audit、annotation release、prompt exports、release integrity、paper-scale status、public data discovery、GHArchive stage-plan decision、batch rewrite validation、batch rewrite project synthesis、project benchmark release、release-level deterministic baselines、release-level prediction scoring、paper table export、rewrite project verifier、staged slice manifest、baseline batch status。
-   - 不重跑 provider/API/GPU 实验，只读取已有证据并给出 pass/fail/warn。
-   - 默认把 paper-scale 不满足作为 warn；最终主实验 release 可用 `--require-paper-scale` 变成 fail gate。
-   - `scripts/run_readiness_report.sh` 和 `scripts/slurm/run_readiness_report.sbatch` 提供本地/集群 release gate。
-
-26. 新增 `score-project-predictions`：
-   - 外部方法只需提交 JSONL：`prediction_id`、`project_id`、`probe_id`、`prediction`，以及可选 `retrieved_memory_ids`、`retrieved_event_ids`、`retrieved_artifact_ids`。
-   - 评分复用 project baseline 的 must-include、must-not、evidence recall、boundary-action recall。
-   - 这是 Mem0/A-MEM/custom agent 在没有完整 runner/API 集成前的无 API 评测接口。
-
-27. 新增 `verify-release-integrity`：
-   - 对 `export-annotation-pack-release` 产生的 release skeleton 做跨文件完整性校验。
-   - 重新计算 annotation pack hash，检查 repo-disjoint split、`tasks/{train,dev,test,all}.jsonl` 计数一致性、每个 task 的 `source_pack_id` 和 split 对齐。
-   - 可选接入 `export-policy-rewrite-prompts-batch` 的输出，检查每个 release pack 都有 prompt export，且 prompt 保留 allowed positive event ids 与 action-boundary constraints。
-   - 小 fixture 出现空 dev/test split 只给 warning；论文规模 release 必须消除该 warning，避免 benchmark 退化成 train-only 工程样例。
-
-28. 新增 `assess-paper-scale`：
-   - 区分“工程样例结构正确”和“论文主实验数据充分”。
-   - `fixture` / `pilot` / `paper` 三档阈值；默认 `paper` 要求更多 repo/pack、更多 task、train/dev/test 都非空、candidate type 覆盖 contextual policy / authorization boundary / issue triage policy / negative example，并要求足够的 source events、eligible windows 和跨时间窗口 repo。
-   - 当前 checked-in GHArchive fixture 会通过 integrity，但会在 `paper` profile 下失败，这是预期；报告会给出 `recommended_next_actions`，指导下一步扩大 GHArchive slice 或补 mining rule。
-
-29. 新增 `discover-public-data`：
-   - 默认扫描 `/home/jmzhang/Workspace/data`、`/data1/public`、`/data1/public/hf` 等目录，识别可直接用于 LongUserPolicyBench 的 GHArchive workflow event 文件和通过 manifest gate 的 email workflow 数据。
-   - 将 GitHub code-text corpus 明确标记为 `github_code_corpus_not_workflow`，避免把代码语料误当成长期用户工作流轨迹。
-   - 当前 `/home/jmzhang/Workspace/data` 报告输出 `usable_sources=61`、`gharchive_event_sources=61`；没有 email manifest source。
-
-29.1 新增 `gharchive-stage-plan`：
-   - 面向真实 GHArchive raw slice 的离线预检，不调用 LLM、不下载数据、不生成 release。
-   - 复用 repo quality、time-window report 和 deterministic candidate mining，直接对照 `fixture` / `pilot` / `paper` 阈值。
-   - 输出 eligible repo、source event、candidate type、eligible window、longitudinal span、skipped repo reason 和 recommended next actions。
-   - 作用是在进入 LLM/人工 rewrite 标注前判断这批真实公开事件是否值得投入标注预算。
-
-30. 新增 `validate-policy-rewrites-batch`：
-   - 真实 GHArchive 多 repo 标注会产生多个 annotation pack；该命令验证所有 pack 的 LLM/人工 rewrite proposals。
-   - 支持一个统一 JSONL 或一个 per-pack proposals 目录，按 annotation/candidate/pack 自动分组，输出 per-pack validation reports 和 `batch_rewrite_validation_report.json`。
-   - readiness 默认把缺失 batch validation 作为 warn；一旦进入 LLM/人工标注后的 release，应要求该 report 通过后再构建 project 或发布 rewrite-derived probes。
-
-31. 新增 `build-projects-from-rewrite-batch`：
-   - 消费已经通过的 `batch_rewrite_validation_report.json`，为每个 pack 生成一个 verifier-checked project。
-   - 每个 project 都保留原始 evidence snippets、rewrite validation artifact、`rewrite_project_manifest.json`，并立即运行标准 project verifier。
-   - 输出 `batch_rewrite_project_report.json`，记录 `projects_passed/projects_failed`；`readiness-report` 已把该报告纳入最终 release gate。
-   - 这一步让 benchmark 构造闭环变成 reference-grounded -> LLM-assisted -> verifier-driven，而不是“LLM 生成后人工默认接受”。
-
-32. 新增 project-level benchmark release：
-   - `export-project-benchmark-release` 将 verifier-checked project directories 导出为评测 release。
-   - 输出 `project_release_manifest.json`、`splits.json`、`probes/{train,dev,test,all}.jsonl`，并记录每个 project 的关键文件 hash。
-   - 默认只引用 project 目录，不复制原始事件 payload；需要可用 `--copy-projects` 打包。
-   - `verify-project-benchmark-release` 重新计算 hash 并检查 project-disjoint split、probe count、all/split union 和 no-LLM-generation 约束。
-   - `readiness-report` 已新增 `project_benchmark_release` gate；fixture 规模 split 为空给 warning，论文主实验必须消除。
-
-33. 新增 release-level external submission scoring：
-   - `score-project-release-predictions` 接收 project benchmark release 和一份跨 project prediction JSONL。
-   - 按 project 分组复用 `score-project-predictions` 的 policy/action scoring contract。
-   - 输出 project/probe coverage、micro/macro pass rate、must-include recall、must-not violation rate、evidence recall、boundary-action recall、diagnostic failure-label counts，以及 by-task/by-capability 分组指标。
-   - 已加入 `examples/project_predictions/project_release_prediction_examples.jsonl` 作为无 API submission 示例。
-   - `export-project-submission-inputs` 导出外部方法应消费的 no-gold input pack：project metadata、artifacts、events、公开 probe query/task metadata 和 prediction template。
-   - `verify-project-submission-inputs` 检查 input pack 不包含 `memory_graph`、`expected_behavior`、gold evidence IDs 或 verifier report，防止 baseline 读到答案。
-   - `run-submission-input-baseline` 只消费 no-gold input pack，输出标准 `ProjectPrediction` JSONL；这是未来 Mem0/A-MEM/custom runner 的输入/输出契约测试。
-   - scorer 会在每条 prediction 的 `diagnostics.labels` 中标注 `retrieved_but_not_applied`、`overbroad_exception`、`stale_policy_reuse`、`negative_example_stored`、`approval_gate_bypassed` 等失败类型，并在 summary 中聚合。
-
-34. 新增 release-level deterministic baseline runner：
-   - `evaluate-project-release` 对整个 project benchmark release 执行确定性 baselines。
-   - 输出每个 project 的 baseline 明细，以及 release-level micro/macro、pass rate、diagnostic labels、by-task/by-capability 指标。
-   - 当前覆盖 `no_memory`、`full_event_log`、`raw_rag`、`temporal_raw_rag`、`oracle_policy_graph`。
-   - deterministic baseline 与 external submission scorer 现在使用同一套 `passed/issues/diagnostics` 分析结构，便于论文主表对齐。
-   - 这是论文主表中基础 baseline 行的无 API 生成入口；Mem0/A-MEM 仍等待 runner/依赖/凭证后接入。
-
-35. release-level scoring artifacts 已进入 readiness gate：
-   - 默认检查 `examples/generated/evaluation_harness/project_submission_inputs`，确保外部方法有无 gold 泄漏的输入包。
-   - 默认检查 `examples/generated/evaluation_harness/project_release_baselines.json`，确保 deterministic baseline 表可复现。
-   - 默认检查 `examples/generated/evaluation_harness/project_release_prediction_report.json`，确保外部方法 JSONL submission scorer 可运行且覆盖所有 probes。
-   - 这能防止只发布 project release、但缺少可复现实验入口或外部 submission 评分入口。
-
-36. 新增 paper-ready table export：
-   - `export-paper-tables` 合并 release-level deterministic baseline report 与一个或多个 external submission scoring report。
-   - 支持直接传入 `score-project-release-prediction-dir` 生成的 batch report，避免手工枚举每个外部方法的 scorer JSON。
-   - 输出 `paper_tables.json`、`main_results.csv/.md`、`task_breakdown.csv/.md`、`capability_breakdown.csv/.md`、`failure_breakdown.csv/.md`、`confidence_intervals.csv/.md`。
-   - 主表包含 micro/macro pass rate、must-include recall、must-not violation rate、evidence recall、boundary-action recall 和 diagnostic label counts。
-   - confidence interval 使用 project/workspace 作为 bootstrap unit，不用 raw probe 重采样，避免同一 project 内相关 probes 夸大显著性。
-   - breakdown 表用于检查方法是否只提升了易检索任务，而没有提升 authorization boundary、negative example suppression、policy update、clarification 等长期用户策略能力。
-   - `readiness-report` 已默认检查 `examples/generated/evaluation_harness/paper_tables`，防止 release 具备 scorer 但缺少可复现论文表格。
-
-37. 新增 GHArchive stage decision gate：
-   - `gharchive-stage-plan` 现在输出 `decision.ready_for_annotation_budget`、`recommended_mode` 和 `rationale`。
-   - `profile=paper` 只有所有 raw-slice checks 通过时才允许进入 LLM/API 或人工 rewrite 标注预算；否则建议 `expand_or_restage_slice`。
-   - `profile=fixture` 即使 checks 通过，也明确标为 `engineering_fixture`，防止把小样例误当成论文数据。
-   - CLI 增加 `--require-ready-for-annotation`；`scripts/prepare_gharchive_slice.sh` 和 Slurm wrapper 可用 `REQUIRE_READY_FOR_ANNOTATION=1` 触发严格门禁。
-   - `scripts/run_gharchive_annotation_pipeline.sh` 在构造 annotation packs 前会先写 stage plan，便于真实数据链路审计。
-   - `readiness-report` 已纳入 `gharchive_stage_plan`；普通模式下非 ready 是 warning，`--require-paper-scale` 下会升级为 fail。
-
-38. 新增 release-level prediction directory scorer：
-   - `score-project-release-prediction-dir` 对一个目录下的多个 `ProjectPrediction` JSONL 逐个评分。
-   - 每个 JSONL 文件对应一个 external system，文件名自动转成 system name，可用 `--system-name-prefix` 加前缀。
-   - 输出每个系统的 score report 和 `prediction_scoring_batch_report.json`。
-   - 新增 `configs/baselines/project_release_prediction_dir.yaml`，可通过 `run-baseline-config` 纳入配置化批处理。
-   - 推荐把 Mem0、A-MEM、custom runner 的输出统一放在 `examples/project_predictions/release_submissions/`，再批量评分并导入 paper tables。
-
-39. 新增 no-provider rewrite job packaging：
-   - `package-policy-rewrite-jobs` 消费 `export-policy-rewrite-prompts-batch` 的输出，将 prompt records 分片为 annotation jobs。
-   - 每个 job 包含 `prompts.jsonl`、空的 `proposals_template.jsonl`、`job_manifest.json`、candidate type counts 和 estimated token budget。
-   - 该步骤不调用 LLM，只做 LLM/API 或人工标注前的 handoff package；真正生成 proposals 时需要停下来等待 API/标注资源。
-   - `readiness-report` 已纳入 `rewrite_jobs` gate，确保 prompt export 后有可审计的标注 job 包。
-
-40. 新增 rewrite job output collection gate：
-   - `collect-policy-rewrite-job-outputs` 是 LLM/API 或人工标注完成后的 no-provider return path。
-   - 默认要求每个 job 目录中存在已完成的 `proposals.jsonl`；也允许标注者直接填充 `proposals_template.jsonl`，但会在 report 中标记 template source。
-   - 收集阶段会拦截 missing file、empty job、unfilled proposal、schema invalid、duplicate proposal、duplicate annotation output 和 prompt/proposal count mismatch。
-   - 未填完整的模板行不会写入 unified proposal JSONL，避免把空 proposal 送入 verifier 后造成难定位错误。
-   - 输出 `collected_rewrite_proposals.jsonl` 和 `rewrite_job_collection_report.json`，只有该报告通过后才运行 `validate-policy-rewrites-batch`。
-
-40.1 新增 OpenAI-compatible rewrite job runner：
-   - `run-policy-rewrite-llm-job` 消费单个 `rewrite_job_XXXX/prompts.jsonl`，调用 OpenAI-compatible chat completion endpoint，写入 `proposals.jsonl` 和 `proposals_llm_generation_report.json`。
-   - `run-policy-rewrite-llm-jobs` 可批量处理整个 rewrite job 目录，支持 `--max-jobs`、`--max-prompts-per-job` 做小批量 smoke，再扩展到全量。
-   - 单 job runner 现在会在每条 prompt 完成后增量写入 `proposals.jsonl` 和 generation report；长请求或 provider 抖动时可以观察 `prompts_attempted/proposals_written/failed`，并从失败 index 断点续跑。
-   - runner 只填 proposal，不跳过 verifier；所有输出仍必须通过 `collect-policy-rewrite-job-outputs` 和 `validate-policy-rewrites-batch`。
-   - 兼容层会记录 provider host、model、reasoning effort、usage 和 coercion，但不会序列化 API key。
-   - 当前真实数据流程使用该 runner 完成 29 个 pilot proposals、88 个 pilot-plus proposals 和 168 个 paper-candidate proposals，并发现/修复了多个工程问题：Python 默认 User-Agent 被网关拒绝，需要显式 `User-Agent`；LLM expected behavior 可能没有逐字覆盖 forbidden action，project synthesis 已在不放宽边界的前提下自动补齐 action-boundary terms；同一 job 的多个 failed-prompt retry 不能并行写同一个 `proposals.jsonl`，应串行补齐或用 collection gate 发现缺口。
-
-41. 新增 external prediction submission CI gate：
-   - `validate-project-prediction-submission` 在评分前验证外部 `ProjectPrediction` JSONL，不使用 gold，也不执行 scorer。
-   - 检查 ProjectPrediction schema、duplicate prediction id、duplicate project/probe row、unknown project/probe、empty prediction 和 release-probe coverage。
-   - 默认要求覆盖 project benchmark release 的所有 probes；调试 partial runner 时可用 `--allow-partial`。
-   - 该入口用于 Mem0、A-MEM、custom runner 接入时的轻量 CI gate，先保证格式和覆盖率，再运行 `score-project-release-predictions` 或 `score-project-release-prediction-dir`。
-
-42. 新增 workflow data source audit：
-   - `audit-workflow-data-sources` 合并 `discover-public-data` 和 `gharchive-stage-plan`，判断当前数据是否真的来自可复用的权威 workflow trace。
-   - 当前 `/home/jmzhang/Workspace/data` 已发现 61 个 GHArchive workflow event source；历史 `/data1/public` 与 `/data1/public/hf` 扫描只发现 RedPajama GitHub code sample，明确不能替代 PR/review/CI/user-action timeline。
-   - 审计会把 `GHArchive`、`Enron-style email`、`Avocado/LDC-style email`、`AppWorld`、`WorkArena/tau-bench` 的当前状态、license/privacy notes 和可进入的 pipeline entry 写入 JSON。
-   - 当前 source audit：`passed=true`、`annotation_ready=true`、`paper_ready=true`（基于当前 stage-plan ready 信号），但仍 warning `email_manifest_missing`；这表示 GHArchive pilot 可进入标注试验，不表示邮件域或最终 paper-scale release 已完成。
-   - 这一步把“不是全流程纯生成”的证据前置成机器 gate：没有真实 workflow source 或 license/privacy manifest，就只能保留工程 fixture，不能宣称 paper-scale benchmark。
-
-43. 更新 README：
-   - `README.md` 已改成读者导向结构，按当前问题定义、pipeline、真实数据来源、关键路径、核心命令、repo layout 和 next paper-scale work 组织。
-   - README 明确标出当前复用的权威真实 workflow 数据是 GH Archive public GitHub event stream；最新状态已更新到 30-repo / 168-probe paper-candidate release，同时明确 email manifest 缺失，避免把 GitHub domain release 误称作多域个人办公 benchmark。
-
-44. 新增 balanced annotation repo selection：
-   - `gharchive-select-annotation-repos` 从真实 GHArchive slice 的 eligible repos 中按 project split 平衡选择下一批 annotation repos。
-   - 该命令解决手动选择 top repo 时可能出现的空 test/dev split；选择策略先满足每个 split 的 `min_per_split`，再按 candidate count、review、execution-boundary、negative-boundary 和 actor 信号排序。
-   - pilot-plus 选择结果为 15 repos、88 tasks、train/dev/test 非空，并已完成 LLM rewrite、project synthesis 和 project release。
-   - paper-candidate 选择结果为 30 repos、168 tasks、train/dev/test 非空，并已完成 LLM rewrite、project synthesis、project release、submission input、deterministic baseline、memory submission contract baseline、paper tables 和 readiness gate。
-   - project release split 已修正为优先按 repo split key，而不是 project_id hash；这保证 annotation release 和 project release 的 repo-disjoint split 一致。
-
-45. 新增 LLM rewrite partial recovery：
-   - `run-policy-rewrite-llm-job` 支持 `--merge-existing`，用于 Cloudflare 524/API timeout 后只补失败 prompt，并按 annotation_id 合并到已有 `proposals.jsonl`。
-   - LLM runner 现在会从 action boundary 自动补齐 `expected_behavior.must_include/must_not_include` 的 allowed/forbidden action 短语，避免合法 proposal 因漏填 forbidden boundary 文本而被 collection gate 拦截。
-   - runner 进一步支持 per-prompt incremental flush；在 30-repo paper-candidate 生成时，这使 0010/0012 的空 content 失败能够精确定位到 prompt index 并单条 retry。
-   - 这些改动来自真实生成中的失败案例：524 timeout、空 content response、空 `must_not_include`、以及并发 retry 同写一个 job 文件造成的最后写覆盖风险。
-
-46. 新增 LLM rewrite human audit gate：
-   - `export-policy-rewrite-human-audit` 从已通过 `validate-policy-rewrites-batch` 的 proposals 中确定性抽样，导出 `audit_items.jsonl`、`audit_decisions_template.jsonl` 和 `audit_pack_manifest.json`。
-   - `audit_items.jsonl` 同时包含 policy candidate、LLM rewritten policy、future probe、expected behavior、source/proposal action boundary、supporting/negative evidence、validator checks 和人工审计问题。
-   - `validate-policy-rewrite-human-audit` 校验人工填写的 decision JSONL，检查覆盖率、重复项、非法 decision、blocking issue labels、accept-rate 阈值和 `needs_revision` 策略。
-   - `readiness-report` 已新增可选 `--rewrite-human-audit`；缺失人工审计报告时是 warning，有报告但未通过时是 fail。
-   - paper-candidate 当前已导出 30 条抽样审计包，但尚未有人审 decision，因此不能把 LLM rewrite 质量声明写成“人工已审核通过”。
-
-47. 新增 memory-system submission baseline 接入层：
-   - `ultra_long_benchmark/pipelines/memory_submission.py` 定义 release-level no-gold memory submission runner，输入为 `export-project-submission-inputs` 产物，输出标准 `ProjectPrediction` JSONL。
-   - 本地 `event_profile_stub` adapter 只读取 `projects/events/probes/artifacts/submission_manifest`，显式记录 `uses_gold_memory_graph=false`、`uses_probe_expected_behavior=false`、`llm_generation_performed=false`、`external_dependency_invoked=false`。
-   - Mem0、A-MEM、Graphiti/Zep-style temporal KG 当前是 gated placeholders；未安装 method-specific runner、依赖和 API 配置时只 dry-run，不会隐式调用外部服务。
-   - 在 30-repo paper-candidate release 上，`memory_submission_event_profile_stub` 覆盖 168/168 probes，submission validation 通过，scoring 为 `micro_pass_rate=0.881`、`micro_evidence_recall=0.8635`、`micro_boundary_action_recall=0.9968`；这说明 no-gold submission/scoring harness 可用，但不能作为 SOTA claim。
-
-48. 新增 probe lexical leakage audit：
-   - `audit-project-release-probe-leakage` 比较 no-gold probe query 与 gold `expected_behavior` / `ActionBoundary` 的 token overlap，检测 future task 题面是否过度暴露答案。
-   - 当前 30-repo paper-candidate release 的原始 public probe wording mean expected overlap 为 0.625、mean boundary overlap 为 0.730；44/168 probes 达到 high-overlap threshold 0.8。
-   - 新增 `export-project-submission-inputs --harden-probe-queries`，不改 gold release，只导出 hardened external submission pack：`examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs_hardened`。该 pack 保持 probe_id/project_id 不变，将 query 改写成 task-type-level future task wording。
-   - hardened pack 已通过 `verify-project-submission-inputs`，0 issues、0 warnings；`audit-submission-input-probe-leakage` 正式命令显示 mean expected overlap 降到 0.258、mean boundary overlap 降到 0.325，high-overlap probes 从 44/168 降到 0/168，missing gold keys 为 0。
-   - 同一 `memory_submission_event_profile_stub` 在原始 no-gold pack 上 `micro_pass_rate=0.881`，在 hardened pack 上降到 `micro_pass_rate=0.179`；这证明原始高分主要是 query lexical shortcut 敏感性，不应作为 SOTA 能力主张。
-   - `readiness-report` 已纳入 `probe_leakage_audit` gate；使用原始 probe audit 会提示 query shortcut warning，使用 hardened input audit 则通过该 gate。论文中应报告 original-vs-hardened sensitivity，并将 hardened input 作为默认外部系统评测入口。
-
-49. 新增外部 memory baseline preflight harness：
-   - `plan-external-memory-submission-adapter` 对 Mem0、A-MEM、Graphiti/Zep-style temporal KG 做 no-gold input contract 检查、Python module 检查、required/optional env 检查，并输出 method-specific next steps，不调用外部 API。
-   - 当前已为 hardened paper-candidate input 生成 `gharchive_real_llm_paper_candidate_mem0_plan.json`、`gharchive_real_llm_paper_candidate_a_mem_plan.json`、`gharchive_real_llm_paper_candidate_graphiti_plan.json`；三者 input contract 均通过，probes=168，但依赖/API env 未 ready，因此未执行真实外部 baseline。
-   - 新增 `scripts/run_external_memory_adapter_plan.sh` 与 `scripts/slurm/run_external_memory_adapter_plan.sbatch`，默认 CPU preflight；真正跑 Mem0/A-MEM 时应在安装 method runner 后切换到 4090/ADA6000 等 GPU 资源并显式 allow external。
-
-
-最新可用验证：
-
-```bash
-python -m ultra_long_benchmark.cli smoke --all
-python -m ultra_long_benchmark.cli validate
-python -m ultra_long_benchmark.cli audit --json --output examples/generated/audit_report.json
-python -m ultra_long_benchmark.cli discover-public-data --root /home/jmzhang/Workspace/data --output examples/generated/public_data_discovery_report.json
-python -m ultra_long_benchmark.cli audit-workflow-data-sources --discovery-report examples/generated/public_data_discovery_report.json --gharchive-stage-plan examples/generated/gharchive_stage_plan.json --output examples/generated/workflow_data_source_audit.json
-python -m ultra_long_benchmark.cli grounded-pilot
-python -m ultra_long_benchmark.cli github-fixture-pilot
-python -m ultra_long_benchmark.cli gharchive-pilot
-python -m ultra_long_benchmark.cli gharchive-quality-report --input tests/fixtures/gharchive_multi_repo_sample.jsonl --output examples/generated/gharchive_quality_report.json
-python -m ultra_long_benchmark.cli gharchive-window-report --input tests/fixtures/gharchive_window_sample.jsonl --window-days 7 --output examples/generated/gharchive_window_report.json
-python -m ultra_long_benchmark.cli gharchive-mine-candidates --input examples/source_fixtures/gharchive_public_events/project_gharchive_001.jsonl --repo acme/docs --output examples/generated/gharchive_candidate_report.json
-python -m ultra_long_benchmark.cli gharchive-stage-plan --input tests/fixtures/gharchive_multi_repo_sample.jsonl --profile paper --window-days 7 --output examples/generated/gharchive_stage_plan.json --allow-fail
-python -m ultra_long_benchmark.cli gharchive-select-annotation-repos --input /home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_pilot_slice.jsonl --target-repos 15 --min-per-split 3 --output examples/generated/gharchive_real_pilot_plus_repo_selection.json
-python -m ultra_long_benchmark.cli gharchive-annotation-pack --input examples/source_fixtures/gharchive_public_events/project_gharchive_001.jsonl --repo acme/docs --output-dir examples/generated/annotation_packs/gharchive_policy
-python -m ultra_long_benchmark.cli gharchive-annotation-pack-batch --input tests/fixtures/gharchive_multi_repo_sample.jsonl --output-dir examples/generated/annotation_packs/gharchive_batch
-python -m ultra_long_benchmark.cli export-annotation-pack-release examples/generated/annotation_packs/gharchive_batch --output-dir examples/generated/release_packaging/gharchive_annotation_pack
-python -m ultra_long_benchmark.cli gharchive-scale-summary examples/generated/annotation_packs/gharchive_batch --release-dir examples/generated/release_packaging/gharchive_annotation_pack --output examples/generated/gharchive_scale_summary.json
-python -m ultra_long_benchmark.cli export-policy-rewrite-prompts examples/generated/annotation_packs/gharchive_policy/annotation_pack.json --output examples/generated/annotation_packs/gharchive_policy/rewrite_prompts.jsonl
-python -m ultra_long_benchmark.cli export-policy-rewrite-prompts-batch examples/generated/annotation_packs/gharchive_batch --output-dir examples/generated/annotation_packs/gharchive_prompt_exports
-python -m ultra_long_benchmark.cli package-policy-rewrite-jobs examples/generated/annotation_packs/gharchive_prompt_exports --output-dir examples/generated/annotation_packs/rewrite_jobs --max-prompts-per-job 100
-python -m ultra_long_benchmark.cli run-policy-rewrite-llm-jobs examples/generated/annotation_packs/gharchive_real_pilot_rewrite_jobs --model gpt-5.5 --reasoning-effort xhigh
-python -m ultra_long_benchmark.cli collect-policy-rewrite-job-outputs examples/generated/annotation_packs/rewrite_jobs --output examples/generated/annotation_packs/rewrite_jobs/collected_rewrite_proposals.jsonl --report examples/generated/annotation_packs/rewrite_jobs/rewrite_job_collection_report.json
-python -m ultra_long_benchmark.cli validate-policy-rewrites-batch examples/generated/annotation_packs/gharchive_batch examples/generated/annotation_packs/rewrite_jobs/collected_rewrite_proposals.jsonl --output-dir examples/generated/annotation_packs/gharchive_rewrite_validation_batch
-python -m ultra_long_benchmark.cli build-projects-from-rewrite-batch examples/generated/annotation_packs/gharchive_rewrite_validation_batch/batch_rewrite_validation_report.json --output-dir examples/generated/projects --project-prefix project_gharchive_rewrite_batch
-python -m ultra_long_benchmark.cli export-project-benchmark-release examples/generated/projects/project_gharchive_rewrite_batch_* --output-dir examples/generated/release_packaging/project_benchmark
-python -m ultra_long_benchmark.cli verify-project-benchmark-release examples/generated/release_packaging/project_benchmark --output examples/generated/project_release_integrity_report.json
-python -m ultra_long_benchmark.cli export-project-submission-inputs examples/generated/release_packaging/project_benchmark --output-dir examples/generated/evaluation_harness/project_submission_inputs
-python -m ultra_long_benchmark.cli verify-project-submission-inputs examples/generated/evaluation_harness/project_submission_inputs --output examples/generated/evaluation_harness/project_submission_input_report.json
-python -m ultra_long_benchmark.cli run-submission-input-baseline examples/generated/evaluation_harness/project_submission_inputs --baseline raw_event_rag_input --top-k 5 --predictions examples/generated/evaluation_harness/submission_input_raw_event_rag_predictions.jsonl --report examples/generated/evaluation_harness/submission_input_raw_event_rag_report.json
-python -m ultra_long_benchmark.cli validate-project-prediction-submission examples/generated/release_packaging/project_benchmark examples/generated/evaluation_harness/submission_input_raw_event_rag_predictions.jsonl --output examples/generated/evaluation_harness/submission_input_raw_event_rag_submission_validation.json
-python -m ultra_long_benchmark.cli score-project-release-predictions examples/generated/release_packaging/project_benchmark examples/generated/evaluation_harness/submission_input_raw_event_rag_predictions.jsonl --output examples/generated/evaluation_harness/submission_input_raw_event_rag_score.json --system-name submission_input_raw_event_rag
-python -m ultra_long_benchmark.cli validate-project-prediction-submission examples/generated/release_packaging/project_benchmark examples/project_predictions/project_release_prediction_examples.jsonl --output examples/generated/evaluation_harness/project_release_prediction_submission_validation.json
-python -m ultra_long_benchmark.cli score-project-release-predictions examples/generated/release_packaging/project_benchmark examples/project_predictions/project_release_prediction_examples.jsonl --output examples/generated/evaluation_harness/project_release_prediction_report.json --system-name example_release_submission
-python -m ultra_long_benchmark.cli evaluate-project-release examples/generated/release_packaging/project_benchmark --output examples/generated/evaluation_harness/project_release_baselines.json --top-k 3
-python -m ultra_long_benchmark.cli score-project-release-prediction-dir examples/generated/release_packaging/project_benchmark examples/project_predictions/release_submissions --output-dir examples/generated/evaluation_harness/prediction_scoring_batch --system-name-prefix external
-python -m ultra_long_benchmark.cli export-paper-tables --release-baseline-report examples/generated/evaluation_harness/project_release_baselines.json --prediction-report examples/generated/evaluation_harness/project_release_prediction_report.json --prediction-report examples/generated/evaluation_harness/submission_input_raw_event_rag_score.json --prediction-batch-report examples/generated/evaluation_harness/prediction_scoring_batch/prediction_scoring_batch_report.json --bootstrap-samples 1000 --bootstrap-seed 0 --output-dir examples/generated/evaluation_harness/paper_tables
-python -m ultra_long_benchmark.cli verify-release-integrity examples/generated/release_packaging/gharchive_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_prompt_exports --output examples/generated/release_integrity_report.json
-python -m ultra_long_benchmark.cli assess-paper-scale examples/generated/release_packaging/gharchive_annotation_pack --profile paper --scale-summary examples/generated/gharchive_scale_summary.json --window-report examples/generated/gharchive_window_report.json --release-integrity-report examples/generated/release_integrity_report.json --output examples/generated/paper_scale_assessment.json --allow-fail
-python -m ultra_long_benchmark.cli validate-policy-rewrites examples/generated/annotation_packs/gharchive_policy/annotation_pack.json examples/annotation_rewrites/gharchive_rewrite_examples.jsonl --output examples/generated/annotation_packs/gharchive_policy/rewrite_validation.json
-python -m ultra_long_benchmark.cli build-project-from-rewrites examples/generated/annotation_packs/gharchive_policy/annotation_pack.json examples/annotation_rewrites/gharchive_rewrite_examples.jsonl --output-dir examples/generated/projects --project-id project_gharchive_rewrite_001
-python -m ultra_long_benchmark.cli gharchive-batch-pilot --input tests/fixtures/gharchive_multi_repo_sample.jsonl
-python -m ultra_long_benchmark.cli evaluate-project examples/generated/projects/project_manual_001 --output examples/generated/evaluation_harness/project_manual_baselines.json --top-k 3
-python -m ultra_long_benchmark.cli evaluate-project examples/generated/projects/project_gharchive_001 --output examples/generated/evaluation_harness/project_gharchive_baselines.json --top-k 3
-python -m ultra_long_benchmark.cli score-action-traces examples/generated/projects/project_gharchive_001 examples/action_traces/gharchive_trace_examples.jsonl --output examples/generated/evaluation_harness/gharchive_action_trace_report.json
-python -m ultra_long_benchmark.cli score-project-predictions examples/generated/projects/project_gharchive_001 examples/project_predictions/gharchive_prediction_examples.jsonl --output examples/generated/evaluation_harness/gharchive_prediction_report.json --system-name example_external_submission
-python -m ultra_long_benchmark.cli validate-baseline-config configs/baselines --output examples/generated/evaluation_harness/baseline_config_validation.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/no_memory_project.yaml --output examples/generated/evaluation_harness/no_memory_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/full_event_log_project.yaml --output examples/generated/evaluation_harness/full_event_log_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/raw_rag_project.yaml --output examples/generated/evaluation_harness/raw_rag_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/temporal_raw_rag_project.yaml --output examples/generated/evaluation_harness/temporal_raw_rag_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/gharchive_action_trace_scoring.yaml --output examples/generated/evaluation_harness/action_trace_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/gharchive_prediction_submission_example.yaml --output examples/generated/evaluation_harness/prediction_submission_config_run.json
-python -m ultra_long_benchmark.cli run-baseline-config-dir configs/baselines --output-dir examples/generated/evaluation_harness/baseline_batch
-python -m ultra_long_benchmark.cli readiness-report --output examples/generated/readiness_report.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/mem0_project_placeholder.yaml --dry-run --output examples/generated/evaluation_harness/mem0_dry_run.json
-python -m ultra_long_benchmark.cli run-baseline-config configs/baselines/a_mem_project_placeholder.yaml --dry-run --output examples/generated/evaluation_harness/a_mem_dry_run.json
-python -m ultra_long_benchmark.cli readiness-report --output examples/generated/readiness_report_real_llm_pilot.json --annotation-release-dir examples/generated/release_packaging/gharchive_real_pilot_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_real_pilot_prompt_exports --rewrite-job-dir examples/generated/annotation_packs/gharchive_real_pilot_rewrite_jobs --staged-slice-manifest /home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_pilot_slice_manifest.json --gharchive-stage-plan examples/generated/gharchive_stage_plan.json --scale-summary examples/generated/gharchive_real_pilot_scale_summary.json --window-report examples/generated/gharchive_window_report.json --public-data-discovery examples/generated/public_data_discovery_report.json --workflow-source-audit examples/generated/workflow_data_source_audit.json --batch-rewrite-validation examples/generated/annotation_packs/gharchive_real_pilot_validation/batch_rewrite_validation_report.json --batch-rewrite-projects examples/generated/projects/gharchive_real_llm_pilot_batch/batch_rewrite_project_report.json --project-release-dir examples/generated/release_packaging/gharchive_real_llm_project_benchmark --project-submission-input-dir examples/generated/evaluation_harness/gharchive_real_llm_submission_inputs --project-release-baseline examples/generated/evaluation_harness/gharchive_real_llm_project_release_baselines.json --paper-table-dir examples/generated/evaluation_harness/gharchive_real_llm_paper_tables --paper-scale-profile pilot
-python -m ultra_long_benchmark.cli readiness-report --output examples/generated/readiness_report_real_llm_pilot_plus.json --annotation-release-dir examples/generated/release_packaging/gharchive_real_pilot_plus_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_real_pilot_plus_prompt_exports --rewrite-job-dir examples/generated/annotation_packs/gharchive_real_pilot_plus_rewrite_jobs --staged-slice-manifest /home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_pilot_slice_manifest.json --gharchive-stage-plan examples/generated/gharchive_stage_plan.json --scale-summary examples/generated/gharchive_real_pilot_plus_scale_summary.json --window-report examples/generated/gharchive_window_report.json --public-data-discovery examples/generated/public_data_discovery_report.json --workflow-source-audit examples/generated/workflow_data_source_audit.json --batch-rewrite-validation examples/generated/annotation_packs/gharchive_real_pilot_plus_validation/batch_rewrite_validation_report.json --batch-rewrite-projects examples/generated/projects/gharchive_real_llm_pilot_plus_batch/batch_rewrite_project_report.json --project-release-dir examples/generated/release_packaging/gharchive_real_llm_pilot_plus_project_benchmark --project-submission-input-dir examples/generated/evaluation_harness/gharchive_real_llm_pilot_plus_submission_inputs --project-release-baseline examples/generated/evaluation_harness/gharchive_real_llm_pilot_plus_project_release_baselines.json --paper-table-dir examples/generated/evaluation_harness/gharchive_real_llm_pilot_plus_paper_tables --paper-scale-profile pilot
-python -m ultra_long_benchmark.cli readiness-report --output examples/generated/readiness_report_real_llm_paper_candidate.json --annotation-release-dir examples/generated/release_packaging/gharchive_real_paper_candidate_annotation_pack --prompt-export-dir examples/generated/annotation_packs/gharchive_real_paper_candidate_prompt_exports --rewrite-job-dir examples/generated/annotation_packs/gharchive_real_paper_candidate_rewrite_jobs --staged-slice-manifest /home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_pilot_slice_manifest.json --gharchive-stage-plan examples/generated/gharchive_stage_plan.json --scale-summary examples/generated/gharchive_real_paper_candidate_scale_summary.json --window-report examples/generated/gharchive_window_report.json --public-data-discovery examples/generated/public_data_discovery_report.json --workflow-source-audit examples/generated/workflow_data_source_audit.json --batch-rewrite-validation examples/generated/annotation_packs/gharchive_real_paper_candidate_validation/batch_rewrite_validation_report.json --batch-rewrite-projects examples/generated/projects/gharchive_real_llm_paper_candidate_batch/batch_rewrite_project_report.json --project-release-dir examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark --project-submission-input-dir examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs --project-release-baseline examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_project_release_baselines.json --paper-table-dir examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_paper_tables --paper-scale-profile paper --require-paper-scale
-python -m ultra_long_benchmark.cli export-policy-rewrite-human-audit examples/generated/annotation_packs/gharchive_real_paper_candidate_validation/batch_rewrite_validation_report.json --output-dir examples/generated/annotation_packs/gharchive_real_paper_candidate_human_audit --sample-size 30 --min-per-candidate-type 2 --seed 0
-python -m ultra_long_benchmark.cli validate-policy-rewrite-human-audit examples/generated/annotation_packs/gharchive_real_paper_candidate_human_audit examples/generated/annotation_packs/gharchive_real_paper_candidate_human_audit/audit_decisions.jsonl --output examples/generated/annotation_packs/gharchive_real_paper_candidate_human_audit/audit_validation_report.json
-```
-
-当前推荐环境为 `/home/jmzhang/miniconda3/envs/benchmark`，可直接激活并运行：
-
-```bash
-source /home/jmzhang/miniconda3/etc/profile.d/conda.sh
-conda activate benchmark
-python -m pip install -e '.[dev]'
-python -m pytest -q
-```
-
----
-
-## 12. 论文贡献点包装
+## 11. 论文贡献点包装
 
 ### Contribution 1: 新问题定义
 
 提出 **Longitudinal User Policy / Habit Induction**：长期个人 Agent 不只是记住事实，而是从用户历史工作流中学习可执行的个人策略。
 
-### Contribution 2: 新 Benchmark
+### Contribution 2: 新 Benchmark Roadmap
 
-构建 reference-grounded、LLM-assisted、verifier-driven benchmark，覆盖 email、calendar、docs、chat、issues、PR、browser、files、forms 等多应用轨迹。
+构建 reference-grounded、LLM-assisted、verifier-driven benchmark。当前正式 release 先覆盖 GHArchive/GitHub developer workflow；email、calendar、docs、chat、browser/web-search、files、forms 是后续多域扩展路线，必须通过 reusable trace、license/privacy/PII、domain verifier、no-gold input、baseline/readiness/claim-boundary gates 后才能作为 release claim。
 
 ### Contribution 3: 新任务和指标
 
-定义 11 类 future tool policy tasks，并引入 boundary violation、exception scope、negative example suppression、authorization gap clarification 等指标。
+定义 future tool policy task taxonomy，并引入 boundary violation、exception scope、negative example suppression、authorization gap clarification 等指标。当前 GHArchive release 覆盖其中 4 类 task types 和 5 个 capability enum values；其余能力是 planned_not_in_current_release。
 
 ### Contribution 4: 系统性实证发现
 
@@ -1053,7 +626,7 @@ python -m pytest -q
 
 ---
 
-## 13. 推荐论文标题
+## 12. 推荐论文标题
 
 1. **Learning How Users Work: Benchmarking Longitudinal Policy and Habit Induction for Tool-Using Agents**
 2. **Beyond Memory QA: Evaluating User Policy Induction from Longitudinal Tool-Use Trajectories**

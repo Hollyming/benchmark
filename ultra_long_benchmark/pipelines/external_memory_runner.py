@@ -154,6 +154,9 @@ def validate_external_memory_predictions_against_input(
     predictions_path = Path(predictions_path)
     issues: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    input_report = verify_project_submission_inputs(input_dir)
+    for issue in input_report.get("issues", []):
+        _issue(issues, "submission_input_invalid", f"submission input contract failed: {issue.get('message', issue)}")
     probes = read_jsonl(input_dir / "probes.jsonl")
     expected_keys = {(str(probe.get("project_id")), str(probe.get("probe_id"))) for probe in probes}
     expected_project_ids = {project_id for project_id, _ in expected_keys}
@@ -215,6 +218,7 @@ def validate_external_memory_predictions_against_input(
         "issues": issues,
         "warnings": warnings,
         "checks": checks,
+        "input_report": input_report,
         "summary": {
             "issues": len(issues),
             "warnings": len(warnings),
@@ -240,7 +244,7 @@ def _external_runner_report(
     probes: list[dict[str, Any]],
     events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    predictions = read_jsonl(predictions_path) if predictions_path.exists() else []
+    predictions = read_jsonl(predictions_path) if executed and predictions_path.exists() else []
     return {
         "input_dir": str(input_dir),
         "predictions_path": str(predictions_path),

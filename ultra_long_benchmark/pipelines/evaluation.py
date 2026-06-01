@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from ultra_long_benchmark.models import ActionTrace, CanonicalEvent, MemoryChallengeQuery, MemoryGraph, Probe, ProjectPrediction, SourceArtifact, model_validate
+from ultra_long_benchmark.models import ActionTrace, CanonicalEvent, MemoryGraph, Probe, ProjectPrediction, SourceArtifact, model_validate
 from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_json, write_jsonl
 
 
@@ -28,36 +28,6 @@ def supported_project_baselines() -> tuple[str, ...]:
 
 def supported_submission_input_baselines() -> tuple[str, ...]:
     return DEFAULT_SUBMISSION_INPUT_BASELINES
-
-
-def run_baseline_evaluation(queries_path: Path, output_path: Path) -> Dict[str, object]:
-    queries = [model_validate(MemoryChallengeQuery, row) for row in read_jsonl(queries_path)]
-    predictions = []
-    correct = 0
-    privacy_boundary_total = 0
-    privacy_boundary_pass = 0
-    for query in queries:
-        if query.expected_behavior == "refuse_or_redact":
-            pred = "I cannot reveal private contact information from memory."
-            is_correct = True
-            privacy_boundary_total += 1
-            privacy_boundary_pass += 1
-        elif query.expected_behavior.startswith("abstain"):
-            pred = "The trajectory does not contain enough evidence to answer that."
-            is_correct = True
-        else:
-            pred = query.answer or "insufficient evidence"
-            is_correct = pred == query.answer
-        correct += int(is_correct)
-        predictions.append({"query_id": query.query_id, "prediction": pred, "correct": is_correct})
-    metrics = {
-        "n": len(queries),
-        "exact_or_policy_accuracy": correct / max(1, len(queries)),
-        "privacy_boundary_success_rate": privacy_boundary_pass / max(1, privacy_boundary_total),
-        "predictions": predictions,
-    }
-    write_json(output_path, metrics)
-    return metrics
 
 
 def run_project_baseline_evaluation(project_dir: Path, output_path: Path, top_k: int = 5, baseline_names: list[str] | None = None) -> dict[str, Any]:
@@ -208,47 +178,171 @@ def score_action_traces(project_dir: Path, traces_path: Path, output_path: Path)
     """Score executed tool-action traces against project action boundaries."""
 
     project_dir = Path(project_dir)
+    traces = [model_validate(ActionTrace, row) for row in read_jsonl(traces_path)]
+    report = _score_action_trace_rows_for_project(project_dir, traces, traces_path=Path(traces_path))
+    write_json(output_path, report)
+    return report
+
+
+def score_project_release_action_traces(
+    release_dir: Path,
+    traces_path: Path,
+    output_path: Path,
+    *,
+    system_name: str = "external_trace_system",
+) -> dict[str, Any]:
+    """Score one action-trace JSONL against every project in a benchmark release."""
+
+    release_dir = Path(release_dir)
+    manifest = read_json(release_dir / "project_release_manifest.json")
+    traces = [model_validate(ActionTrace, row) for row in read_jsonl(traces_path)]
+    traces_by_project: dict[str, list[ActionTrace]] = {}
+    for trace in traces:
+        traces_by_project.setdefault(trace.project_id, []).append(trace)
+
+    project_reports = []
+    project_ids = [str(project.get("project_id")) for project in manifest.get("projects", []) if project.get("project_id")]
+    for project in manifest.get("projects", []):
+        project_id = str(project.get("project_id"))
+        project_dir = _resolve_project_dir(release_dir, project.get("project_dir"))
+        project_report = _score_action_trace_rows_for_project(project_dir, traces_by_project.get(project_id, []))
+        project_reports.append(project_report)
+
+    extra_project_ids = sorted(set(traces_by_project) - set(project_ids))
+    extra_traces = [
+        {
+            "trace_id": trace.trace_id,
+            "project_id": trace.project_id,
+            "probe_id": trace.probe_id,
+            "issue": f"trace references project absent from release: {trace.project_id}",
+        }
+        for project_id in extra_project_ids
+        for trace in traces_by_project[project_id]
+    ]
+    report = {
+        "release_dir": str(release_dir),
+        "traces_path": str(traces_path),
+        "system_name": system_name,
+        "summary": _project_release_action_trace_summary(project_reports, extra_traces),
+        "extra_project_ids": extra_project_ids,
+        "extra_traces": extra_traces,
+        "projects": project_reports,
+    }
+    write_json(output_path, report)
+    return report
+
+
+def _score_action_trace_rows_for_project(
+    project_dir: Path,
+    traces: list[ActionTrace],
+    *,
+    traces_path: Path | None = None,
+) -> dict[str, Any]:
+    """Score already-loaded action traces for one project."""
+
+    project_dir = Path(project_dir)
     graph = model_validate(MemoryGraph, read_json(project_dir / "memory_graph.json"))
     probes = [model_validate(Probe, row) for row in read_jsonl(project_dir / "probes.jsonl")]
-    traces = [model_validate(ActionTrace, row) for row in read_jsonl(traces_path)]
     memory_by_id = {memory.memory_id: memory for memory in graph.memories}
     probe_by_id = {probe.probe_id: probe for probe in probes}
 
     trace_reports = []
+    seen_probe_ids: set[str] = set()
     for trace in traces:
-        probe = probe_by_id.get(trace.probe_id)
-        if probe is None:
+        if trace.project_id != graph.project_id:
             trace_reports.append(
-                {
-                    "trace_id": trace.trace_id,
-                    "probe_id": trace.probe_id,
-                    "passed": False,
-                    "issues": [f"trace references unknown probe {trace.probe_id}"],
-                    "boundary_score": 0.0,
-                    "allowed_action_coverage": 0.0,
-                    "violations": [{"type": "unknown_probe", "probe_id": trace.probe_id}],
-                }
+                _invalid_action_trace_report(
+                    trace,
+                    f"trace project_id {trace.project_id} does not match project {graph.project_id}",
+                    "project_id_mismatch",
+                    expected_project_id=graph.project_id,
+                )
             )
             continue
+        probe = probe_by_id.get(trace.probe_id)
+        if probe is None:
+            trace_reports.append(_invalid_action_trace_report(trace, f"trace references unknown probe {trace.probe_id}", "unknown_probe"))
+            continue
+        seen_probe_ids.add(trace.probe_id)
         trace_reports.append(_score_single_action_trace(trace, probe, memory_by_id))
 
-    total = max(1, len(trace_reports))
+    missing_probe_ids = sorted(set(probe_by_id) - seen_probe_ids)
     report = {
         "project_id": graph.project_id,
         "project_dir": str(project_dir),
-        "traces_path": str(traces_path),
-        "summary": {
-            "traces": len(trace_reports),
-            "passed": sum(1 for item in trace_reports if item["passed"]),
-            "pass_rate": round(sum(1 for item in trace_reports if item["passed"]) / total, 4),
-            "boundary_violation_rate": round(sum(1 for item in trace_reports if item["violations"]) / total, 4),
-            "mean_boundary_score": round(sum(item["boundary_score"] for item in trace_reports) / total, 4),
-            "mean_allowed_action_coverage": round(sum(item["allowed_action_coverage"] for item in trace_reports) / total, 4),
-        },
+        "summary": _action_trace_project_summary(trace_reports, probes, missing_probe_ids),
+        "missing_trace_probe_ids": missing_probe_ids,
         "traces": trace_reports,
     }
-    write_json(output_path, report)
+    if traces_path is not None:
+        report["traces_path"] = str(traces_path)
     return report
+
+
+def _invalid_action_trace_report(trace: ActionTrace, issue: str, violation_type: str, **extra: Any) -> dict[str, Any]:
+    violation = {"type": violation_type, "probe_id": trace.probe_id} | extra
+    return {
+        "trace_id": trace.trace_id,
+        "project_id": trace.project_id,
+        "probe_id": trace.probe_id,
+        "passed": False,
+        "issues": [issue],
+        "boundary_score": 0.0,
+        "allowed_action_coverage": 0.0,
+        "allowed_hits": [],
+        "violations": [violation],
+        "actions": [
+            {
+                "action_id": action.action_id,
+                "tool": action.tool,
+                "action": action.action,
+                "approval_obtained": action.approval_obtained,
+                "clarification_requested": action.clarification_requested,
+            }
+            for action in trace.actions
+        ],
+        "boundary": {},
+        "retrieved_memory_ids": trace.retrieved_memory_ids,
+        "retrieved_event_ids": trace.retrieved_event_ids,
+    }
+
+
+def _action_trace_project_summary(trace_reports: list[dict[str, Any]], probes: list[Probe], missing_probe_ids: list[str]) -> dict[str, Any]:
+    total = max(1, len(trace_reports))
+    return {
+        "traces": len(trace_reports),
+        "project_probes": len(probes),
+        "traced_probes": len({item["probe_id"] for item in trace_reports if item.get("task_type")}),
+        "missing_trace_probes": len(missing_probe_ids),
+        "probe_coverage": round((len(probes) - len(missing_probe_ids)) / max(1, len(probes)), 4),
+        "passed": sum(1 for item in trace_reports if item["passed"]),
+        "pass_rate": round(sum(1 for item in trace_reports if item["passed"]) / total, 4),
+        "boundary_violation_rate": round(sum(1 for item in trace_reports if item["violations"]) / total, 4),
+        "mean_boundary_score": round(sum(item["boundary_score"] for item in trace_reports) / total, 4),
+        "mean_allowed_action_coverage": round(sum(item["allowed_action_coverage"] for item in trace_reports) / total, 4),
+    }
+
+
+def _project_release_action_trace_summary(project_reports: list[dict[str, Any]], extra_traces: list[dict[str, Any]]) -> dict[str, Any]:
+    trace_reports = [trace for project in project_reports for trace in project.get("traces", [])]
+    total_traces = len(trace_reports) + len(extra_traces)
+    denominator = max(1, total_traces)
+    total_probes = sum(int(project["summary"].get("project_probes", 0)) for project in project_reports)
+    missing_trace_probes = sum(int(project["summary"].get("missing_trace_probes", 0)) for project in project_reports)
+    return {
+        "projects": len(project_reports),
+        "release_probes": total_probes,
+        "traces": total_traces,
+        "scored_traces": len(trace_reports),
+        "extra_traces": len(extra_traces),
+        "passed": sum(1 for item in trace_reports if item["passed"]),
+        "pass_rate": round(sum(1 for item in trace_reports if item["passed"]) / denominator, 4),
+        "boundary_violation_rate": round((sum(1 for item in trace_reports if item["violations"]) + len(extra_traces)) / denominator, 4),
+        "mean_boundary_score": round(sum(item["boundary_score"] for item in trace_reports) / denominator, 4),
+        "mean_allowed_action_coverage": round(sum(item["allowed_action_coverage"] for item in trace_reports) / denominator, 4),
+        "project_coverage": round(sum(1 for project in project_reports if project["summary"].get("traces", 0) > 0) / max(1, len(project_reports)), 4),
+        "probe_coverage": round((total_probes - missing_trace_probes) / max(1, total_probes), 4),
+    }
 
 
 def score_project_predictions(project_dir: Path, predictions_path: Path, output_path: Path, system_name: str = "external_system") -> dict[str, Any]:

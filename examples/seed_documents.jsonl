@@ -1,3 +1,0 @@
-{"doc_id":"seed_doc_001","title":"Project kickoff memo","text":"The team will build a memory benchmark with long-horizon user interactions and evidence-linked queries.","created_at":"2024-02-01","origin":"local_seed","license":"synthetic","metadata":{"domain":"agent_memory"}}
-{"doc_id":"seed_doc_002","title":"Annotation note","text":"Annotators should judge whether answers cite the right event IDs and avoid exposing private contact details.","created_at":"2024-02-14","origin":"local_seed","license":"synthetic","metadata":{"domain":"quality_control"}}
-

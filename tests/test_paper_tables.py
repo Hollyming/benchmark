@@ -75,6 +75,76 @@ def test_export_paper_tables_accepts_prediction_batch_report(tmp_path: Path):
     assert read_json(tmp_path / "paper_tables_from_batch" / "paper_tables.json")["counts"]["systems"] == 2
 
 
+def test_readme_current_baseline_results_match_score_artifacts():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    table = _readme_baseline_table(readme)
+    expected = _expected_readme_baseline_rows()
+
+    assert set(table) >= set(expected)
+    for key, metrics in expected.items():
+        assert table[key] == metrics
+
+
+def _readme_baseline_table(readme: str) -> dict[tuple[str, str], dict[str, float | int]]:
+    rows: dict[tuple[str, str], dict[str, float | int]] = {}
+    in_table = False
+    for line in readme.splitlines():
+        if line.strip() == "| Dataset / input | System | Probes | Micro pass | Evidence recall | Boundary-action recall | Must-include recall | Must-not violation |":
+            in_table = True
+            continue
+        if not in_table:
+            continue
+        if line.startswith("|---"):
+            continue
+        if not line.startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        assert len(cells) == 8
+        dataset, system = cells[0], cells[1].strip("`")
+        rows[(dataset, system)] = {
+            "probes": int(cells[2]),
+            "micro_pass_rate": float(cells[3]),
+            "micro_evidence_recall": float(cells[4]),
+            "micro_boundary_action_recall": float(cells[5]),
+            "micro_must_include_recall": float(cells[6]),
+            "micro_must_not_violation_rate": float(cells[7]),
+        }
+    assert rows
+    return rows
+
+
+def _expected_readme_baseline_rows() -> dict[tuple[str, str], dict[str, float | int]]:
+    rows: dict[tuple[str, str], dict[str, float | int]] = {}
+    release_baselines = read_json(
+        ROOT / "examples" / "generated" / "evaluation_harness" / "gharchive_formal_project_release_baselines.json"
+    )
+    for system, summary in release_baselines["summary"]["baselines"].items():
+        rows[("GHArchive release", system)] = _rounded_metrics(summary)
+    score_files = {
+        ("GHArchive no-gold", "memory_submission_event_profile_stub"): "gharchive_formal_memory_profile_stub_score.json",
+        ("GHArchive hardened no-gold", "memory_submission_event_profile_stub_hardened"): "gharchive_formal_memory_profile_stub_hardened_score.json",
+        ("GHArchive hardened no-gold", "external_echo_runner_contract"): "gharchive_formal_echo_policy_runner_score.json",
+        ("GHArchive hardened no-gold", "a_mem_gpt54mini_prompt_adapter"): "gharchive_formal_a_mem_prompt_adapter_score.json",
+        ("GHArchive hardened no-gold", "mem0_gpt54mini_prompt_adapter"): "gharchive_formal_mem0_prompt_adapter_score.json",
+        ("GHArchive hardened no-gold", "graphiti_gpt54mini_prompt_adapter"): "gharchive_formal_graphiti_prompt_adapter_score.json",
+    }
+    score_dir = ROOT / "examples" / "generated" / "evaluation_harness"
+    for key, filename in score_files.items():
+        rows[key] = _rounded_metrics(read_json(score_dir / filename)["summary"])
+    return rows
+
+
+def _rounded_metrics(summary: dict) -> dict[str, float | int]:
+    return {
+        "probes": int(summary["predictions"]),
+        "micro_pass_rate": round(float(summary["micro_pass_rate"]), 4),
+        "micro_evidence_recall": round(float(summary["micro_evidence_recall"]), 4),
+        "micro_boundary_action_recall": round(float(summary["micro_boundary_action_recall"]), 4),
+        "micro_must_include_recall": round(float(summary["micro_must_include_recall"]), 4),
+        "micro_must_not_violation_rate": round(float(summary["micro_must_not_violation_rate"]), 4),
+    }
+
+
 def _build_rewrite_projects(tmp_path: Path) -> list[Path]:
     batch_dir = tmp_path / "packs"
     validation_dir = tmp_path / "rewrite_validation"

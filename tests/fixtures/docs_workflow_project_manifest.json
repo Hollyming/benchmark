@@ -1,0 +1,341 @@
+{
+  "dataset_name": "reviewed_docs_fixture",
+  "domain": "docs_workflow",
+  "source_dataset": "docs_reviewed_fixture",
+  "license": "CC-BY-4.0 fixture",
+  "redistribution": {
+    "allowed": true
+  },
+  "privacy_review": {
+    "status": "passed",
+    "pii_redaction": true
+  },
+  "project_id": "project_docs_fixture_001",
+  "records": [
+    {
+      "record_id": "docs_001",
+      "event_id": "event_docs_summary_policy",
+      "timestamp": "2026-05-01T09:00:00Z",
+      "actor": "editor@example.com",
+      "title": "Roadmap document structure",
+      "tool": "docs",
+      "action": "require_executive_summary",
+      "content": "The user asks every roadmap review document to start with an executive summary before detailed sections.",
+      "event_type": "docs_review_policy",
+      "claims": [
+        "executive_summary_first"
+      ],
+      "entities": [
+        "editor@example.com"
+      ]
+    },
+    {
+      "record_id": "docs_002",
+      "event_id": "event_docs_lina_exception",
+      "timestamp": "2026-05-04T10:30:00Z",
+      "actor": "user@example.com",
+      "title": "Lina minor edit exception",
+      "tool": "docs",
+      "action": "allow_minor_copyedits",
+      "content": "Lina may make minor copy edits directly, but scope or pricing changes still need explicit approval before publishing.",
+      "event_type": "docs_policy_exception",
+      "claims": [
+        "lina_minor_copy_exception",
+        "major_doc_changes_need_approval"
+      ],
+      "entities": [
+        "user@example.com",
+        "lina@example.com"
+      ]
+    },
+    {
+      "record_id": "docs_003",
+      "event_id": "event_docs_negative_pricing",
+      "timestamp": "2026-05-06T13:00:00Z",
+      "actor": "reviewer@example.com",
+      "title": "Pricing edit held for approval",
+      "tool": "docs",
+      "action": "reject_unapproved_pricing_change",
+      "content": "A pricing section change from Lina was held for approval because the exception covers only minor copy edits.",
+      "event_type": "negative_evidence",
+      "claims": [
+        "pricing_change_not_minor_copyedit"
+      ],
+      "entities": [
+        "lina@example.com"
+      ],
+      "invalidates": [
+        "event_docs_lina_exception"
+      ]
+    },
+    {
+      "record_id": "docs_004",
+      "event_id": "event_docs_distractor_font",
+      "timestamp": "2026-05-07T16:00:00Z",
+      "actor": "designer@example.com",
+      "title": "One-off slide font",
+      "tool": "docs",
+      "action": "try_playful_font",
+      "content": "A one-off slide used a playful font for a social event and is unrelated to durable document policy.",
+      "event_type": "docs_distractor",
+      "claims": [
+        "one_off_font_style"
+      ],
+      "entities": [
+        "designer@example.com"
+      ]
+    }
+  ],
+  "memory_graph": {
+    "project_id": "project_docs_fixture_001",
+    "metadata": {
+      "construction": "reviewed_docs_manifest_fixture"
+    },
+    "memories": [
+      {
+        "memory_id": "memory_docs_summary_policy",
+        "project_id": "project_docs_fixture_001",
+        "memory_type": "user_policy",
+        "content": "Roadmap review documents should start with an executive summary.",
+        "source_events": [
+          "event_docs_summary_policy"
+        ],
+        "future_utility": {
+          "score": 0.9,
+          "expected_tasks": [
+            "implicit_policy_induction",
+            "docs_review"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "start_with_executive_summary"
+          ],
+          "forbidden_actions": [
+            "send_without_executive_summary"
+          ],
+          "conditions": [
+            "roadmap_review_doc"
+          ],
+          "authorized_tools": [
+            "docs"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_docs_major_change_policy",
+        "project_id": "project_docs_fixture_001",
+        "memory_type": "user_policy",
+        "content": "Scope or pricing changes in documents require explicit approval before publishing.",
+        "source_events": [
+          "event_docs_lina_exception"
+        ],
+        "future_utility": {
+          "score": 0.88,
+          "expected_tasks": [
+            "policy_update_and_exception_handling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "request_approval_for_major_doc_changes"
+          ],
+          "forbidden_actions": [
+            "publish_major_doc_change_without_approval"
+          ],
+          "conditions": [
+            "scope_or_pricing_change"
+          ],
+          "authorized_tools": [
+            "docs"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_docs_lina_minor_exception",
+        "project_id": "project_docs_fixture_001",
+        "memory_type": "policy_exception",
+        "content": "Lina may make minor copy edits directly, but that exception does not cover pricing or scope changes.",
+        "source_events": [
+          "event_docs_summary_policy",
+          "event_docs_lina_exception"
+        ],
+        "relations": [
+          {
+            "type": "exception_to",
+            "target": "memory_docs_major_change_policy"
+          }
+        ],
+        "future_utility": {
+          "score": 0.87,
+          "expected_tasks": [
+            "policy_update_and_exception_handling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "allow_lina_minor_copyedits"
+          ],
+          "forbidden_actions": [
+            "treat_pricing_change_as_minor_copyedit"
+          ],
+          "conditions": [
+            "lina_minor_copyedit"
+          ],
+          "authorized_tools": [
+            "docs"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_docs_negative_pricing",
+        "project_id": "project_docs_fixture_001",
+        "memory_type": "negative_policy_example",
+        "content": "Do not store Lina's pricing edits as minor-copy exceptions; hold pricing changes for approval.",
+        "source_events": [
+          "event_docs_negative_pricing"
+        ],
+        "relations": [
+          {
+            "type": "invalidates",
+            "target": "memory_docs_lina_minor_exception"
+          }
+        ],
+        "negative_evidence": [
+          "event_docs_negative_pricing"
+        ],
+        "action_boundary": {
+          "allowed_actions": [
+            "hold_pricing_change_for_approval"
+          ],
+          "forbidden_actions": [
+            "store_pricing_change_as_minor_edit_exception"
+          ],
+          "conditions": [
+            "pricing_change"
+          ],
+          "authorized_tools": [
+            "docs"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_docs_distractor_font",
+        "project_id": "project_docs_fixture_001",
+        "memory_type": "distractor",
+        "content": "A one-off playful slide font is unrelated to durable document workflow policy.",
+        "source_events": [],
+        "status": "distractor"
+      }
+    ]
+  },
+  "probes": [
+    {
+      "probe_id": "probe_docs_summary_policy",
+      "project_id": "project_docs_fixture_001",
+      "trajectory_id": "trajectory_docs_fixture",
+      "task_type": "implicit_policy_induction",
+      "query": "A roadmap review doc is ready to share. What structure should the agent check first?",
+      "expected_behavior": {
+        "must_include": [
+          "start with executive summary",
+          "roadmap review doc"
+        ],
+        "must_not_include": [
+          "send without executive summary"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_docs_summary_policy"
+        ]
+      },
+      "capabilities": [
+        "user_policy_induction",
+        "workflow_boundary_respect"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "policy_action_accuracy"
+        ]
+      },
+      "difficulty": "medium"
+    },
+    {
+      "probe_id": "probe_docs_lina_exception",
+      "project_id": "project_docs_fixture_001",
+      "trajectory_id": "trajectory_docs_fixture",
+      "task_type": "policy_update_and_exception_handling",
+      "query": "Lina changed a roadmap pricing section. Can the agent publish it directly?",
+      "expected_behavior": {
+        "must_include": [
+          "request approval for major doc changes",
+          "allow Lina minor copyedits",
+          "treat pricing change as minor copyedit"
+        ],
+        "must_not_include": [
+          "publish major doc change without approval"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_docs_major_change_policy",
+          "memory_docs_lina_minor_exception"
+        ],
+        "obsolete": [
+          "memory_docs_major_change_policy"
+        ]
+      },
+      "capabilities": [
+        "policy_update_exception_handling",
+        "contextual_policy_selection"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "exception_scope_accuracy"
+        ]
+      },
+      "difficulty": "hard"
+    },
+    {
+      "probe_id": "probe_docs_negative_pricing",
+      "project_id": "project_docs_fixture_001",
+      "trajectory_id": "trajectory_docs_fixture",
+      "task_type": "negative_example_storage_gating",
+      "query": "Should Lina's pricing edit be stored as a normal minor-edit exception?",
+      "expected_behavior": {
+        "must_include": [
+          "hold pricing change for approval",
+          "do not store",
+          "pricing change as minor edit exception"
+        ],
+        "must_not_include": [
+          "durable document policy"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_docs_negative_pricing"
+        ],
+        "negative": [
+          "memory_docs_negative_pricing"
+        ],
+        "distractor": [
+          "memory_docs_distractor_font"
+        ]
+      },
+      "capabilities": [
+        "habit_storage_gating"
+      ],
+      "evaluation": {
+        "answer_type": "storage_decision",
+        "metrics": [
+          "storage_precision"
+        ]
+      },
+      "difficulty": "medium"
+    }
+  ]
+}

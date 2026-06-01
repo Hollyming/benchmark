@@ -7,14 +7,20 @@ baseline:
   requires_gpu: true
   memory_backend: a_mem
 data:
-  project_dir: examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark
-  submission_input_dir: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs_hardened
-  predictions_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_a_mem_predictions.jsonl
-  output_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_a_mem_report.json
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/gharchive_formal_a_mem_prompt_adapter_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_formal_a_mem_prompt_adapter_report.json
 evaluation:
   mode: memory_submission_prediction_generation
   adapter: a_mem
   top_k: 8
+  provider_config_path: opencode.json
+  model: gpt-5.4-mini
+  max_output_tokens: 512
+  request_timeout: 60
+  max_retries: 3
+  retry_backoff_seconds: 2
   metrics:
     - project_release_micro_pass_rate
     - evidence_recall
@@ -29,7 +35,7 @@ resources:
 reproducibility:
   seed: 0
   deterministic: false
-  notes: Uses the hardened no-gold input pack. Requires method-specific A-MEM runner, provider/model configuration, and explicit --allow-llm-api / ALLOW_LLM_API=1 before execution.
+  notes: Uses the hardened no-gold input pack. With --allow-llm-api, runs an OpenAI-compatible A-MEM-style prompt adapter against gpt-5.4-mini and emits ProjectPrediction JSONL; it does not import the upstream A-MEM package.
 environment:
   required:
     - OPENAI_API_KEY

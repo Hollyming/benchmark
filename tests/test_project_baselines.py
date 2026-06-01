@@ -2,48 +2,14 @@ from pathlib import Path
 
 from ultra_long_benchmark.pipelines.evaluation import run_project_baseline_evaluation
 from ultra_long_benchmark.pipelines.evaluation import score_project_predictions
-from ultra_long_benchmark.pipelines.gharchive_pilot import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
-from ultra_long_benchmark.pipelines.gharchive_pilot import run_gharchive_pilot
-from ultra_long_benchmark.pipelines.grounded_pilot import run_manual_grounded_pilot
+from ultra_long_benchmark.pipelines.gharchive import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
+from ultra_long_benchmark.pipelines.gharchive import build_gharchive_project_fixture
 from ultra_long_benchmark.shared.io import read_json
 from ultra_long_benchmark.shared.io import write_jsonl
 
 
-def test_project_baselines_compare_oracle_and_raw_rag_on_grounded_project(tmp_path: Path):
-    summary = run_manual_grounded_pilot(tmp_path / "projects")
-    report_path = tmp_path / "manual_baselines.json"
-    report = run_project_baseline_evaluation(Path(summary["project_dir"]), report_path, top_k=2)
-
-    assert report_path.exists()
-    assert report["project_id"] == "project_manual_001"
-    oracle = report["baselines"]["oracle_policy_graph"]
-    raw_rag = report["baselines"]["raw_rag"]
-    no_memory = report["baselines"]["no_memory"]
-    full_event_log = report["baselines"]["full_event_log"]
-    temporal_raw_rag = report["baselines"]["temporal_raw_rag"]
-    assert oracle["n"] == 5
-    assert raw_rag["n"] == 5
-    assert no_memory["n"] == 5
-    assert full_event_log["n"] == 5
-    assert temporal_raw_rag["n"] == 5
-    assert oracle["must_include_recall"] >= raw_rag["must_include_recall"]
-    assert oracle["evidence_recall"] >= raw_rag["evidence_recall"]
-    assert oracle["pass_rate"] >= raw_rag["pass_rate"]
-    assert "diagnostic_label_counts" in raw_rag
-    assert "by_task_type" in raw_rag
-    assert "by_capability" in raw_rag
-    assert full_event_log["evidence_recall"] >= raw_rag["evidence_recall"]
-    assert full_event_log["evidence_recall"] == 1.0
-    assert no_memory["evidence_recall"] == 0.0
-    assert oracle["boundary_action_recall"] > 0
-    assert all(prediction["retrieved_memory_ids"] for prediction in oracle["predictions"])
-    assert all(not prediction["retrieved_memory_ids"] for prediction in raw_rag["predictions"])
-    assert all("diagnostics" in prediction for prediction in raw_rag["predictions"])
-    assert all("passed" in prediction for prediction in raw_rag["predictions"])
-
-
 def test_project_baselines_handle_gharchive_policy_probes(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+    summary = build_gharchive_project_fixture(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
     report_path = tmp_path / "gharchive_baselines.json"
     report = run_project_baseline_evaluation(Path(summary["project_dir"]), report_path, top_k=3)
 
@@ -56,7 +22,7 @@ def test_project_baselines_handle_gharchive_policy_probes(tmp_path: Path):
 
 
 def test_project_baselines_can_run_selected_temporal_raw_rag_only(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+    summary = build_gharchive_project_fixture(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
     report_path = tmp_path / "temporal_raw_rag.json"
     report = run_project_baseline_evaluation(
         Path(summary["project_dir"]),
@@ -72,7 +38,7 @@ def test_project_baselines_can_run_selected_temporal_raw_rag_only(tmp_path: Path
 
 
 def test_score_project_predictions_accepts_external_submission_jsonl(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+    summary = build_gharchive_project_fixture(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
     project_dir = Path(summary["project_dir"])
     predictions_path = tmp_path / "predictions.jsonl"
     write_jsonl(
@@ -113,7 +79,7 @@ def test_score_project_predictions_accepts_external_submission_jsonl(tmp_path: P
 
 
 def test_score_project_predictions_reports_unknown_probe(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+    summary = build_gharchive_project_fixture(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
     predictions_path = tmp_path / "bad_predictions.jsonl"
     write_jsonl(
         predictions_path,

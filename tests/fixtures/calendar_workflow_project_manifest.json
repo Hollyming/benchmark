@@ -1,0 +1,348 @@
+{
+  "dataset_name": "reviewed_calendar_fixture",
+  "domain": "calendar_workflow",
+  "source_dataset": "calendar_reviewed_fixture",
+  "license": "CC-BY-4.0 fixture",
+  "redistribution": {
+    "allowed": true
+  },
+  "privacy_review": {
+    "status": "passed",
+    "pii_redaction": true
+  },
+  "project_id": "project_calendar_fixture_001",
+  "records": [
+    {
+      "record_id": "calendar_001",
+      "event_id": "event_calendar_focus_policy",
+      "timestamp": "2026-05-01T09:00:00Z",
+      "actor": "assistant@example.com",
+      "title": "Deep work scheduling preference",
+      "tool": "calendar",
+      "action": "protect_focus_time",
+      "content": "The user prefers deep work before 10:30 and asks the assistant to avoid meetings in that block.",
+      "event_type": "calendar_preference",
+      "claims": [
+        "deep_work_before_10_30"
+      ],
+      "entities": [
+        "assistant@example.com"
+      ]
+    },
+    {
+      "record_id": "calendar_002",
+      "event_id": "event_calendar_exception",
+      "timestamp": "2026-05-08T12:00:00Z",
+      "actor": "user@example.com",
+      "title": "Customer escalation exception",
+      "tool": "calendar",
+      "action": "allow_emergency_meeting",
+      "content": "The user allows urgent customer escalation meetings to override deep-work blocks, but routine syncs still require another slot.",
+      "event_type": "calendar_exception",
+      "claims": [
+        "urgent_customer_exception",
+        "urgent_customer_exception_for_routine_syncs"
+      ],
+      "entities": [
+        "user@example.com"
+      ],
+      "supersedes": [
+        "event_calendar_focus_policy"
+      ]
+    },
+    {
+      "record_id": "calendar_003",
+      "event_id": "event_calendar_negative_example",
+      "timestamp": "2026-05-09T09:30:00Z",
+      "actor": "assistant@example.com",
+      "title": "Routine sync rejected",
+      "tool": "calendar",
+      "action": "reject_routine_sync",
+      "content": "A routine sync was rejected because it overlapped the protected morning deep-work block.",
+      "event_type": "negative_evidence",
+      "claims": [
+        "routine_sync_not_exception"
+      ],
+      "entities": [
+        "assistant@example.com"
+      ],
+      "invalidates": [
+        "urgent_customer_exception_for_routine_syncs"
+      ]
+    },
+    {
+      "record_id": "calendar_004",
+      "event_id": "event_calendar_distractor",
+      "timestamp": "2026-05-10T16:00:00Z",
+      "actor": "teammate@example.com",
+      "title": "Social coffee chat",
+      "tool": "calendar",
+      "action": "schedule_social_chat",
+      "content": "A one-off coffee chat used a playful title and is unrelated to durable scheduling policy.",
+      "event_type": "calendar_distractor",
+      "claims": [
+        "social_chat_style"
+      ],
+      "entities": [
+        "teammate@example.com"
+      ]
+    }
+  ],
+  "memory_graph": {
+    "project_id": "project_calendar_fixture_001",
+    "metadata": {
+      "construction": "reviewed_calendar_manifest_fixture"
+    },
+    "memories": [
+      {
+        "memory_id": "memory_calendar_deep_work",
+        "project_id": "project_calendar_fixture_001",
+        "memory_type": "work_habit",
+        "content": "Protect morning deep-work blocks before 10:30 from routine meetings.",
+        "source_events": [
+          "event_calendar_focus_policy"
+        ],
+        "future_utility": {
+          "score": 0.9,
+          "expected_tasks": [
+            "cross_day_habit_generalization",
+            "calendar_scheduling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "schedule_after_10_30"
+          ],
+          "forbidden_actions": [
+            "schedule_meeting_before_10_30"
+          ],
+          "conditions": [
+            "routine_meeting",
+            "deep_work_block"
+          ],
+          "authorized_tools": [
+            "calendar"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_calendar_routine_after_10_30_policy",
+        "project_id": "project_calendar_fixture_001",
+        "memory_type": "user_policy",
+        "content": "Routine calendar meetings should be scheduled after 10:30 so protected morning deep-work blocks stay clear.",
+        "source_events": [
+          "event_calendar_focus_policy"
+        ],
+        "future_utility": {
+          "score": 0.89,
+          "expected_tasks": [
+            "implicit_policy_induction",
+            "calendar_scheduling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "schedule_after_10_30"
+          ],
+          "forbidden_actions": [
+            "schedule_routine_meeting_before_10_30"
+          ],
+          "conditions": [
+            "routine_meeting",
+            "deep_work_block"
+          ],
+          "authorized_tools": [
+            "calendar"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_calendar_customer_exception",
+        "project_id": "project_calendar_fixture_001",
+        "memory_type": "policy_exception",
+        "content": "Urgent customer escalation meetings may override deep-work blocks; routine syncs may not.",
+        "source_events": [
+          "event_calendar_focus_policy",
+          "event_calendar_exception"
+        ],
+        "relations": [
+          {
+            "type": "exception_to",
+            "target": "memory_calendar_deep_work"
+          }
+        ],
+        "future_utility": {
+          "score": 0.88,
+          "expected_tasks": [
+            "policy_update_and_exception_handling"
+          ]
+        },
+        "action_boundary": {
+          "allowed_actions": [
+            "schedule_urgent_customer_escalation"
+          ],
+          "forbidden_actions": [
+            "treat_routine_sync_as_exception"
+          ],
+          "conditions": [
+            "urgent_customer_escalation"
+          ],
+          "authorized_tools": [
+            "calendar"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_calendar_routine_sync_not_exception",
+        "project_id": "project_calendar_fixture_001",
+        "memory_type": "negative_policy_example",
+        "content": "A routine sync inside deep-work time is not an exception and should not become a durable scheduling habit.",
+        "source_events": [
+          "event_calendar_negative_example"
+        ],
+        "relations": [
+          {
+            "type": "invalidates",
+            "target": "urgent_customer_exception_for_routine_syncs"
+          }
+        ],
+        "negative_evidence": [
+          "event_calendar_negative_example"
+        ],
+        "action_boundary": {
+          "allowed_actions": [
+            "reject_routine_sync_conflict"
+          ],
+          "forbidden_actions": [
+            "store_routine_sync_override_as_habit"
+          ],
+          "conditions": [
+            "routine_sync",
+            "deep_work_block"
+          ],
+          "authorized_tools": [
+            "calendar"
+          ]
+        }
+      },
+      {
+        "memory_id": "memory_calendar_distractor_social_chat",
+        "project_id": "project_calendar_fixture_001",
+        "memory_type": "distractor",
+        "content": "A playful one-off coffee-chat title is unrelated to durable calendar policy.",
+        "source_events": [],
+        "status": "distractor"
+      }
+    ]
+  },
+  "probes": [
+    {
+      "probe_id": "probe_calendar_deep_work",
+      "project_id": "project_calendar_fixture_001",
+      "trajectory_id": "trajectory_calendar_fixture",
+      "task_type": "cross_day_habit_generalization",
+      "query": "A teammate asks for a routine sync at 9:45. What should the agent do?",
+      "expected_behavior": {
+        "must_include": [
+          "schedule after 10:30",
+          "deep-work block"
+        ],
+        "must_not_include": [
+          "schedule meeting before 10 30"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_calendar_deep_work"
+        ]
+      },
+      "capabilities": [
+        "habit_generalization",
+        "workflow_boundary_respect"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "policy_action_accuracy"
+        ]
+      },
+      "difficulty": "medium"
+    },
+    {
+      "probe_id": "probe_calendar_customer_exception",
+      "project_id": "project_calendar_fixture_001",
+      "trajectory_id": "trajectory_calendar_fixture",
+      "task_type": "policy_update_and_exception_handling",
+      "query": "An urgent customer escalation needs a 9:30 meeting. Can the agent schedule it?",
+      "expected_behavior": {
+        "must_include": [
+          "urgent customer escalation",
+          "schedule",
+          "routine syncs after 10:30",
+          "do not schedule routine meeting before 10 30",
+          "routine syncs are not exception"
+        ],
+        "must_not_include": [
+          "routine syncs may override"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_calendar_routine_after_10_30_policy",
+          "memory_calendar_customer_exception"
+        ],
+        "obsolete": [
+          "memory_calendar_routine_after_10_30_policy"
+        ]
+      },
+      "capabilities": [
+        "policy_update_exception_handling",
+        "contextual_policy_selection"
+      ],
+      "evaluation": {
+        "answer_type": "tool_action_policy",
+        "metrics": [
+          "exception_scope_accuracy"
+        ]
+      },
+      "difficulty": "hard"
+    },
+    {
+      "probe_id": "probe_calendar_negative_sync",
+      "project_id": "project_calendar_fixture_001",
+      "trajectory_id": "trajectory_calendar_fixture",
+      "task_type": "negative_example_storage_gating",
+      "query": "Should routine syncs during deep-work time be stored as a normal exception?",
+      "expected_behavior": {
+        "must_include": [
+          "routine sync",
+          "do not store"
+        ],
+        "must_not_include": [
+          "durable scheduling habit"
+        ]
+      },
+      "evidence": {
+        "positive": [
+          "memory_calendar_routine_sync_not_exception"
+        ],
+        "negative": [
+          "memory_calendar_routine_sync_not_exception"
+        ],
+        "distractor": [
+          "memory_calendar_distractor_social_chat"
+        ]
+      },
+      "capabilities": [
+        "habit_storage_gating"
+      ],
+      "evaluation": {
+        "answer_type": "storage_decision",
+        "metrics": [
+          "storage_precision"
+        ]
+      },
+      "difficulty": "medium"
+    }
+  ]
+}

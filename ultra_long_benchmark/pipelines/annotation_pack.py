@@ -26,10 +26,10 @@ from ultra_long_benchmark.models import (
     model_validate,
     model_to_dict,
 )
-from ultra_long_benchmark.pipelines.gharchive_pilot import DEFAULT_FIXTURE_PATH, DEFAULT_REPO, mine_gharchive_policy_candidates, profile_gharchive_repos
-from ultra_long_benchmark.pipelines.grounded_pilot import write_grounded_project
+from ultra_long_benchmark.pipelines.gharchive import DEFAULT_FIXTURE_PATH, DEFAULT_REPO, mine_gharchive_policy_candidates, profile_gharchive_repos
 from ultra_long_benchmark.pipelines.source_adapters import GHArchiveEventAdapter
 from ultra_long_benchmark.pipelines.verifier import run_project_verifier
+from ultra_long_benchmark.project_writer import write_project
 from ultra_long_benchmark.shared.io import read_json, read_jsonl, write_json, write_jsonl
 
 
@@ -855,7 +855,7 @@ def build_project_from_policy_rewrites(
     annotation_pack_path: Path,
     proposals_path: Path,
     output_dir: Path,
-    project_id: str = "project_gharchive_rewrite_001",
+    project_id: str = "project_gharchive_rewrite_single",
     validation_output_path: Path | None = None,
 ) -> dict[str, Any]:
     """Convert validated rewrite proposals into a verifier-checked project draft."""
@@ -881,7 +881,7 @@ def build_project_from_policy_rewrites(
     artifacts, events, event_id_map = _artifacts_events_from_pack(project_id, pack)
     graph = _memory_graph_from_rewrites(project_id, proposals, task_by_annotation, event_id_map)
     probes = _probes_from_rewrites(project_id, proposals, task_by_annotation)
-    project_dir = write_grounded_project(
+    project_dir = write_project(
         Path(output_dir),
         profile,
         artifacts,

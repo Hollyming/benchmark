@@ -3,9 +3,20 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ultra_long_benchmark.audit import audit_generated, format_audit_text
+from ultra_long_benchmark.artifact_bundle import audit_artifact_bundle
+from ultra_long_benchmark.artifact_bundle import DEFAULT_BENCHMARK_RELEASE_ARTIFACTS
+from ultra_long_benchmark.artifact_bundle import verify_artifact_bundle_manifest
+from ultra_long_benchmark.claim_boundary import audit_paper_claim_boundaries
+from ultra_long_benchmark.claim_boundary import verify_paper_claim_boundary_audit
+from ultra_long_benchmark.claim_lint import DEFAULT_CLAIM_LINT_PATHS
+from ultra_long_benchmark.claim_lint import lint_paper_claims
+from ultra_long_benchmark.claim_lint import verify_paper_claim_lint_report
 from ultra_long_benchmark.data_discovery import DEFAULT_PUBLIC_ROOTS
 from ultra_long_benchmark.data_discovery import discover_public_data_sources
+from ultra_long_benchmark.data_discovery import verify_public_data_discovery_report
+from ultra_long_benchmark.domain_expansion import build_domain_expansion_readiness_report
+from ultra_long_benchmark.domain_expansion import DEFAULT_DOMAIN_EXPANSION_REPORTS
+from ultra_long_benchmark.domain_expansion import verify_domain_expansion_readiness_report
 from ultra_long_benchmark.pipelines.annotation_pack import build_project_from_policy_rewrites
 from ultra_long_benchmark.pipelines.annotation_pack import build_projects_from_policy_rewrite_batch
 from ultra_long_benchmark.pipelines.annotation_pack import build_gharchive_annotation_pack
@@ -22,33 +33,34 @@ from ultra_long_benchmark.pipelines.baseline_configs import run_baseline_config
 from ultra_long_benchmark.pipelines.baseline_configs import run_baseline_config_dir
 from ultra_long_benchmark.pipelines.baseline_configs import validate_baseline_config
 from ultra_long_benchmark.pipelines.baseline_configs import validate_baseline_config_dir
+from ultra_long_benchmark.pipelines.baseline_configs import verify_baseline_batch_report
+from ultra_long_benchmark.pipelines.baseline_configs import verify_baseline_config_validation_report
 from ultra_long_benchmark.paper_scale import assess_release_scale
+from ultra_long_benchmark.benchmark_release_gate import build_benchmark_release_gate_report
+from ultra_long_benchmark.benchmark_release_gate import DEFAULT_GATE_REPORTS
 from ultra_long_benchmark.paper_tables import export_paper_tables
 from ultra_long_benchmark.probe_audit import audit_project_release_probe_leakage
 from ultra_long_benchmark.probe_audit import audit_submission_input_probe_leakage
-from ultra_long_benchmark.pipelines.evaluation import run_baseline_evaluation
 from ultra_long_benchmark.pipelines.evaluation import run_project_baseline_evaluation
 from ultra_long_benchmark.pipelines.evaluation import run_project_release_baseline_evaluation
 from ultra_long_benchmark.pipelines.evaluation import run_submission_input_baseline
 from ultra_long_benchmark.pipelines.evaluation import score_project_release_prediction_dir
+from ultra_long_benchmark.pipelines.evaluation import score_project_release_action_traces
 from ultra_long_benchmark.pipelines.evaluation import score_project_release_predictions
 from ultra_long_benchmark.pipelines.evaluation import score_project_predictions
 from ultra_long_benchmark.pipelines.evaluation import score_action_traces
-from ultra_long_benchmark.pipelines.gharchive_pilot import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
-from ultra_long_benchmark.pipelines.gharchive_pilot import DEFAULT_REPO as DEFAULT_GHARCHIVE_REPO
-from ultra_long_benchmark.pipelines.gharchive_pilot import build_gharchive_slice
-from ultra_long_benchmark.pipelines.gharchive_pilot import mine_gharchive_policy_candidates
-from ultra_long_benchmark.pipelines.gharchive_pilot import plan_gharchive_stage
-from ultra_long_benchmark.pipelines.gharchive_pilot import profile_gharchive_repos
-from ultra_long_benchmark.pipelines.gharchive_pilot import profile_gharchive_time_windows
-from ultra_long_benchmark.pipelines.gharchive_pilot import rank_gharchive_repos
-from ultra_long_benchmark.pipelines.gharchive_pilot import run_gharchive_batch_pilot
-from ultra_long_benchmark.pipelines.gharchive_pilot import run_gharchive_pilot
-from ultra_long_benchmark.pipelines.gharchive_pilot import select_gharchive_annotation_repos
-from ultra_long_benchmark.pipelines.grounded_pilot import run_manual_grounded_pilot
-from ultra_long_benchmark.pipelines.github_fixture import run_github_fixture_pilot
-from ultra_long_benchmark.pipelines.ingestion import ingest_seed_documents
-from ultra_long_benchmark.pipelines.literature import build_literature_map
+from ultra_long_benchmark.pipelines.enron_email_manifest import DEFAULT_ENRON_TARBALL
+from ultra_long_benchmark.pipelines.enron_email_manifest import DEFAULT_OUTPUT_PATH as DEFAULT_ENRON_MANIFEST_OUTPUT
+from ultra_long_benchmark.pipelines.enron_email_manifest import build_enron_email_workflow_manifest
+from ultra_long_benchmark.pipelines.gharchive import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
+from ultra_long_benchmark.pipelines.gharchive import DEFAULT_REPO as DEFAULT_GHARCHIVE_REPO
+from ultra_long_benchmark.pipelines.gharchive import build_gharchive_slice
+from ultra_long_benchmark.pipelines.gharchive import mine_gharchive_policy_candidates
+from ultra_long_benchmark.pipelines.gharchive import plan_gharchive_stage
+from ultra_long_benchmark.pipelines.gharchive import profile_gharchive_repos
+from ultra_long_benchmark.pipelines.gharchive import profile_gharchive_time_windows
+from ultra_long_benchmark.pipelines.gharchive import rank_gharchive_repos
+from ultra_long_benchmark.pipelines.gharchive import select_gharchive_annotation_repos
 from ultra_long_benchmark.pipelines.llm_rewrite import run_policy_rewrite_llm_job
 from ultra_long_benchmark.pipelines.llm_rewrite import run_policy_rewrite_llm_jobs
 from ultra_long_benchmark.pipelines.external_memory_runner import run_external_memory_submission_runner
@@ -56,15 +68,15 @@ from ultra_long_benchmark.pipelines.external_memory_runner import validate_exter
 from ultra_long_benchmark.pipelines.memory_submission import plan_external_memory_submission_adapter
 from ultra_long_benchmark.pipelines.memory_submission import run_memory_submission_baseline
 from ultra_long_benchmark.pipelines.memory_submission import supported_memory_submission_adapters
-from ultra_long_benchmark.pipelines.persona import simulate_personas
-from ultra_long_benchmark.pipelines.qc import run_quality_control
-from ultra_long_benchmark.pipelines.query import generate_queries
-from ultra_long_benchmark.pipelines.release import package_release
 from ultra_long_benchmark.pipelines.rewrite_audit import export_policy_rewrite_human_audit_pack
 from ultra_long_benchmark.pipelines.rewrite_audit import validate_policy_rewrite_human_audit
-from ultra_long_benchmark.pipelines.stress import compute_stress_profiles
-from ultra_long_benchmark.pipelines.trajectory import generate_trajectories
+from ultra_long_benchmark.pipelines.source_adapters import validate_workflow_manifest_adapter
 from ultra_long_benchmark.pipelines.verifier import run_project_verifier
+from ultra_long_benchmark.pipelines.workflow_manifest_project import build_project_from_workflow_manifest
+from ultra_long_benchmark.pipelines.workflow_manifest_project import preflight_workflow_manifest_release
+from ultra_long_benchmark.pipelines.workflow_manifest_project import preflight_workflow_manifest_release_batch
+from ultra_long_benchmark.pipelines.workflow_manifest_project import verify_workflow_manifest_preflight_batch_report
+from ultra_long_benchmark.pipelines.workflow_manifest_project import verify_workflow_manifest_preflight_report
 from ultra_long_benchmark.project_release import export_project_benchmark_release
 from ultra_long_benchmark.project_release import export_project_submission_inputs
 from ultra_long_benchmark.project_release import validate_project_prediction_submission
@@ -75,23 +87,43 @@ from ultra_long_benchmark.release_integrity import verify_annotation_release_int
 from ultra_long_benchmark.shared.io import read_json
 from ultra_long_benchmark.shared.io import write_json
 from ultra_long_benchmark.source_audit import audit_workflow_data_sources
+from ultra_long_benchmark.source_audit import verify_workflow_data_source_audit
+from ultra_long_benchmark.taxonomy_coverage import audit_project_release_taxonomy_coverage
+from ultra_long_benchmark.taxonomy_coverage import verify_project_release_taxonomy_coverage_audit
 
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATED = ROOT / "examples" / "generated"
 
 
+def _add_release_gate_args(gate_parser: argparse.ArgumentParser) -> None:
+    gate_parser.add_argument(
+        "--output",
+        type=Path,
+        default=GENERATED / "evaluation_harness" / "gharchive_formal_gate_report.json",
+        help="Output benchmark release gate summary JSON.",
+    )
+    gate_parser.add_argument("--root", type=Path, default=ROOT, help="Root used to resolve relative report paths.")
+    gate_parser.add_argument("--report", action="append", default=[], help="Additional or overriding report mapping in name=path form.")
+    gate_parser.add_argument(
+        "--workflow-manifest-preflight",
+        action="append",
+        default=[],
+        type=Path,
+        help="Optional report produced by preflight-workflow-manifest-release. Repeat for multiple domains.",
+    )
+    gate_parser.add_argument(
+        "--workflow-manifest-preflight-batch",
+        action="append",
+        default=[],
+        type=Path,
+        help="Optional report produced by preflight-workflow-manifest-release-batch. Repeat for multiple batches.",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ultra-long benchmark construction CLI")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("smoke").add_argument("--all", action="store_true", help="Run all offline demo stages.")
-    sub.add_parser("literature")
-    sub.add_parser("ingest")
-    sub.add_parser("simulate")
-    sub.add_parser("trajectories")
-    sub.add_parser("queries")
-    sub.add_parser("qc")
-    sub.add_parser("evaluate")
     evaluate_project = sub.add_parser("evaluate-project")
     evaluate_project.add_argument("project_dir", type=Path, help="Project directory containing memory_graph.json and probes.jsonl.")
     evaluate_project.add_argument("--output", type=Path, help="Optional output JSON path.")
@@ -116,6 +148,11 @@ def main() -> None:
     score_traces.add_argument("project_dir", type=Path, help="Project directory containing memory_graph.json and probes.jsonl.")
     score_traces.add_argument("traces", type=Path, help="JSONL action traces to score.")
     score_traces.add_argument("--output", type=Path, help="Optional output JSON path.")
+    score_release_traces = sub.add_parser("score-project-release-action-traces")
+    score_release_traces.add_argument("release_dir", type=Path, help="Project benchmark release directory.")
+    score_release_traces.add_argument("traces", type=Path, help="JSONL action traces with project_id/probe_id fields.")
+    score_release_traces.add_argument("--output", type=Path, help="Optional output JSON path.")
+    score_release_traces.add_argument("--system-name", default="external_trace_system", help="Name to record for the traced system.")
     score_predictions = sub.add_parser("score-project-predictions")
     score_predictions.add_argument("project_dir", type=Path, help="Project directory containing memory_graph.json and probes.jsonl.")
     score_predictions.add_argument("predictions", type=Path, help="JSONL project predictions to score.")
@@ -145,6 +182,12 @@ def main() -> None:
     memory_submission.add_argument("--top-k", type=int, default=5, help="Top-k event retrieval for local no-gold adapters.")
     memory_submission.add_argument("--system-name", help="Name stored in prediction metadata and runner report.")
     memory_submission.add_argument("--allow-external", action="store_true", help="Allow method-specific external adapters after dependencies/API credentials are configured.")
+    memory_submission.add_argument("--provider-config", type=Path, help="Optional OpenAI-compatible provider config JSON, such as opencode.json.")
+    memory_submission.add_argument("--model", help="OpenAI-compatible model name for external prompt adapters.")
+    memory_submission.add_argument("--max-output-tokens", type=int, default=512, help="Maximum output tokens per external adapter prediction.")
+    memory_submission.add_argument("--request-timeout", type=float, default=60.0, help="OpenAI-compatible request timeout in seconds.")
+    memory_submission.add_argument("--max-retries", type=int, default=3, help="Retry count for transient OpenAI-compatible provider failures.")
+    memory_submission.add_argument("--retry-backoff-seconds", type=float, default=2.0, help="Initial exponential backoff delay for provider retries.")
     external_memory_plan = sub.add_parser("plan-external-memory-submission-adapter")
     external_memory_plan.add_argument("input_dir", type=Path, help="Directory produced by export-project-submission-inputs.")
     external_memory_plan.add_argument("--adapter", required=True, choices=["mem0", "a_mem", "graphiti"], help="External memory-system adapter to preflight.")
@@ -169,45 +212,90 @@ def main() -> None:
     baseline_config.add_argument("path", type=Path, help="Baseline YAML config file or directory.")
     baseline_config.add_argument("--output", type=Path, help="Optional JSON report path.")
     baseline_config.add_argument("--strict-paths", action="store_true", help="Require referenced project/data paths to exist.")
+    verify_baseline_config = sub.add_parser("verify-baseline-config-validation")
+    verify_baseline_config.add_argument("report", type=Path, help="Report produced by validate-baseline-config on a directory.")
+    verify_baseline_config.add_argument("--output", type=Path, help="Optional JSON verification report path.")
+    verify_baseline_config.add_argument("--root", type=Path, help="Override root for resolving relative config paths.")
+    verify_baseline_batch = sub.add_parser("verify-baseline-batch")
+    verify_baseline_batch.add_argument("report", type=Path, help="Report produced by run-baseline-config-dir.")
+    verify_baseline_batch.add_argument("--output", type=Path, help="Optional JSON verification report path.")
+    verify_baseline_batch.add_argument("--root", type=Path, help="Override root for resolving runner report and output artifact paths.")
     run_baseline = sub.add_parser("run-baseline-config")
     run_baseline.add_argument("config", type=Path, help="Baseline YAML config to run or dry-run.")
     run_baseline.add_argument("--output", type=Path, help="Optional runner report JSON path.")
     run_baseline.add_argument("--dry-run", action="store_true", help="Validate and report planned execution without running.")
     run_baseline.add_argument("--allow-llm-api", action="store_true", help="Allow configs that require LLM/API credentials.")
+    run_baseline.add_argument("--allow-external-runner", action="store_true", help="Allow baseline configs to import and invoke external memory runner plugins.")
     run_baseline_dir = sub.add_parser("run-baseline-config-dir")
     run_baseline_dir.add_argument("config_dir", type=Path, help="Directory of baseline YAML configs.")
     run_baseline_dir.add_argument("--output-dir", type=Path, default=GENERATED / "evaluation_harness" / "baseline_batch", help="Output directory for per-config runner reports.")
     run_baseline_dir.add_argument("--no-dry-run-external", action="store_true", help="Do not dry-run LLM/API configs automatically.")
     run_baseline_dir.add_argument("--allow-llm-api", action="store_true", help="Allow configs that require LLM/API credentials.")
+    run_baseline_dir.add_argument("--allow-external-runner", action="store_true", help="Allow baseline configs to import and invoke external memory runner plugins.")
     discover_data = sub.add_parser("discover-public-data")
     discover_data.add_argument("--root", action="append", dest="roots", type=Path, help="Root directory to scan. Repeat for multiple roots. Defaults to /home/jmzhang/Workspace/data, /data1/public, and /data1/public/hf.")
     discover_data.add_argument("--output", type=Path, default=GENERATED / "public_data_discovery_report.json", help="Output JSON discovery report.")
     discover_data.add_argument("--max-depth", type=int, default=5, help="Maximum directory depth below each root.")
     discover_data.add_argument("--max-files", type=int, default=1000, help="Maximum candidate files to inspect.")
     discover_data.add_argument("--sample-records", type=int, default=3, help="Number of JSON/JSONL records to sample per file.")
+    verify_discovery = sub.add_parser("verify-public-data-discovery")
+    verify_discovery.add_argument("report", type=Path, help="Report produced by discover-public-data.")
+    verify_discovery.add_argument("--output", type=Path, help="Optional JSON verification report path.")
+    verify_discovery.add_argument("--root", type=Path, help="Override root used to resolve candidate file paths.")
+    validate_manifest = sub.add_parser("validate-workflow-manifest")
+    validate_manifest.add_argument("manifest", type=Path, help="Reviewed email/calendar/docs/chat/browser workflow manifest JSON.")
+    validate_manifest.add_argument("--output", type=Path, help="Optional JSON validation report path.")
+    validate_manifest.add_argument("--adapter", choices=["auto", "email", "workflow"], default="auto", help="Manifest adapter to use. Auto selects by domain.")
+    validate_manifest.add_argument("--no-redact", action="store_true", help="Disable redaction while validating. Use only for already-safe fixtures.")
+    enron_manifest = sub.add_parser("build-enron-email-workflow-manifest")
+    enron_manifest.add_argument("--tarball", type=Path, default=DEFAULT_ENRON_TARBALL, help="Local CMU Enron maildir tarball.")
+    enron_manifest.add_argument("--output", type=Path, default=DEFAULT_ENRON_MANIFEST_OUTPUT, help="Output redacted email workflow manifest JSON.")
+    enron_manifest.add_argument("--project-id", default="project_enron_email_workflow_001", help="Project id stored in the generated manifest.")
+    enron_manifest.add_argument("--max-records", type=int, default=12, help="Maximum raw Enron messages to sample before deriving the manifest.")
+    enron_manifest.add_argument("--max-body-chars", type=int, default=700, help="Maximum redacted body characters retained per source email record.")
+    workflow_manifest_project = sub.add_parser("build-project-from-workflow-manifest")
+    workflow_manifest_project.add_argument("manifest", type=Path, help="Reviewed workflow manifest containing records, memory_graph, and probes.")
+    workflow_manifest_project.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
+    workflow_manifest_project.add_argument("--report", type=Path, help="Optional project build report JSON path.")
+    workflow_manifest_project.add_argument("--adapter", choices=["auto", "email", "workflow"], default="auto", help="Manifest adapter to use. Auto selects by domain.")
+    workflow_manifest_project.add_argument("--no-redact", action="store_true", help="Disable redaction while writing project files. Use only for already-safe fixtures.")
+    workflow_manifest_preflight = sub.add_parser("preflight-workflow-manifest-release")
+    workflow_manifest_preflight.add_argument("manifest", type=Path, help="Reviewed workflow manifest containing records, memory_graph, and probes.")
+    workflow_manifest_preflight.add_argument("--output-dir", type=Path, default=GENERATED / "workflow_manifest_preflight", help="Output directory for project, release, no-gold input, and audit reports.")
+    workflow_manifest_preflight.add_argument("--report", type=Path, help="Optional preflight report JSON path. Defaults to <output-dir>/workflow_manifest_release_preflight.json.")
+    workflow_manifest_preflight.add_argument("--adapter", choices=["auto", "email", "workflow"], default="auto", help="Manifest adapter to use. Auto selects by domain.")
+    workflow_manifest_preflight.add_argument("--no-redact", action="store_true", help="Disable redaction while writing project files. Use only for already-safe fixtures.")
+    workflow_manifest_preflight.add_argument("--dataset-name", help="Dataset name stored in the temporary project benchmark release.")
+    workflow_manifest_preflight.add_argument("--version", default="0.1.0", help="Release version stored in the temporary project benchmark release.")
+    workflow_manifest_preflight.add_argument("--baseline", action="append", dest="baselines", help="Deterministic project baseline to run. Repeat for multiple baselines.")
+    workflow_manifest_preflight.add_argument("--top-k", type=int, default=5, help="Top-k event retrieval for deterministic baselines.")
+    workflow_manifest_preflight.add_argument("--harden-probe-queries", action="store_true", help="Export hardened no-gold public probe queries.")
+    workflow_manifest_preflight_batch = sub.add_parser("preflight-workflow-manifest-release-batch")
+    workflow_manifest_preflight_batch.add_argument("manifest", nargs="+", type=Path, help="Reviewed workflow manifests containing records, memory_graph, and probes.")
+    workflow_manifest_preflight_batch.add_argument("--output-dir", type=Path, default=GENERATED / "workflow_manifest_preflight_batch", help="Output directory for per-manifest preflights and batch report.")
+    workflow_manifest_preflight_batch.add_argument("--report", type=Path, help="Optional batch report JSON path. Defaults to <output-dir>/workflow_manifest_preflight_batch_report.json.")
+    workflow_manifest_preflight_batch.add_argument("--adapter", choices=["auto", "email", "workflow"], default="auto", help="Manifest adapter to use. Auto selects by domain.")
+    workflow_manifest_preflight_batch.add_argument("--no-redact", action="store_true", help="Disable redaction while writing project files. Use only for already-safe fixtures.")
+    workflow_manifest_preflight_batch.add_argument("--version", default="0.1.0", help="Release version stored in each temporary project benchmark release.")
+    workflow_manifest_preflight_batch.add_argument("--baseline", action="append", dest="baselines", help="Deterministic project baseline to run. Repeat for multiple baselines.")
+    workflow_manifest_preflight_batch.add_argument("--top-k", type=int, default=5, help="Top-k event retrieval for deterministic baselines.")
+    workflow_manifest_preflight_batch.add_argument("--harden-probe-queries", action="store_true", help="Export hardened no-gold public probe queries.")
+    verify_workflow_manifest_preflight = sub.add_parser("verify-workflow-manifest-preflight")
+    verify_workflow_manifest_preflight.add_argument("report", type=Path, help="Report produced by preflight-workflow-manifest-release.")
+    verify_workflow_manifest_preflight.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    verify_workflow_manifest_preflight.add_argument("--root", type=Path, help="Override root used to resolve preflight artifact paths.")
+    verify_workflow_manifest_preflight_batch = sub.add_parser("verify-workflow-manifest-preflight-batch")
+    verify_workflow_manifest_preflight_batch.add_argument("report", type=Path, help="Report produced by preflight-workflow-manifest-release-batch.")
+    verify_workflow_manifest_preflight_batch.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    verify_workflow_manifest_preflight_batch.add_argument("--root", type=Path, help="Override root used to resolve batch preflight report paths.")
     source_audit = sub.add_parser("audit-workflow-data-sources")
     source_audit.add_argument("--discovery-report", type=Path, default=GENERATED / "public_data_discovery_report.json", help="Report produced by discover-public-data.")
     source_audit.add_argument("--gharchive-stage-plan", type=Path, help="Optional report produced by gharchive-stage-plan.")
     source_audit.add_argument("--output", type=Path, default=GENERATED / "workflow_data_source_audit.json", help="Output source audit report.")
     source_audit.add_argument("--require-paper-ready", action="store_true", help="Fail unless sources and GHArchive stage plan are paper-ready.")
-    sub.add_parser("release")
-    sub.add_parser("stress")
-    grounded = sub.add_parser("grounded-pilot")
-    grounded.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
-    github_fixture = sub.add_parser("github-fixture-pilot")
-    github_fixture.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
-    gharchive = sub.add_parser("gharchive-pilot")
-    gharchive.add_argument("--input", type=Path, default=DEFAULT_GHARCHIVE_FIXTURE_PATH, help="Local GHArchive JSON/JSONL/GZ event slice.")
-    gharchive.add_argument("--repo", default=DEFAULT_GHARCHIVE_REPO, help="Optional repository full name filter, e.g. owner/repo.")
-    gharchive.add_argument("--project-id", default="project_gharchive_001", help="Project id for generated output.")
-    gharchive.add_argument("--max-records", type=int, help="Optional maximum accepted GHArchive records.")
-    gharchive.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
-    gharchive_batch = sub.add_parser("gharchive-batch-pilot")
-    gharchive_batch.add_argument("--input", type=Path, default=DEFAULT_GHARCHIVE_FIXTURE_PATH, help="Local GHArchive JSON/JSONL/GZ event slice.")
-    gharchive_batch.add_argument("--repo", action="append", dest="repos", help="Repository full name to include. Repeat for multiple repos. Defaults to discovery.")
-    gharchive_batch.add_argument("--project-prefix", default="project_gharchive", help="Project id prefix for generated outputs.")
-    gharchive_batch.add_argument("--max-records-per-repo", type=int, help="Optional maximum accepted records per repo.")
-    gharchive_batch.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
+    verify_source_audit = sub.add_parser("verify-workflow-data-source-audit")
+    verify_source_audit.add_argument("report", type=Path, help="Report produced by audit-workflow-data-sources.")
+    verify_source_audit.add_argument("--output", type=Path, help="Optional verification report JSON path.")
     gharchive_build_slice = sub.add_parser("gharchive-build-slice")
     gharchive_build_slice.add_argument("input", type=Path, help="Local GHArchive file or directory containing JSON/JSONL/GZ event rows.")
     gharchive_build_slice.add_argument("--output", type=Path, required=True, help="Output JSONL slice path.")
@@ -255,11 +343,11 @@ def main() -> None:
     gharchive_annotation_pack_batch = sub.add_parser("gharchive-annotation-pack-batch")
     gharchive_annotation_pack_batch.add_argument("--input", type=Path, default=DEFAULT_GHARCHIVE_FIXTURE_PATH, help="Local GHArchive JSON/JSONL/GZ event slice.")
     gharchive_annotation_pack_batch.add_argument("--repo", action="append", dest="repos", help="Repository full name to include. Repeat for multiple repos. Defaults to eligible repo discovery.")
-    gharchive_annotation_pack_batch.add_argument("--output-dir", type=Path, default=GENERATED / "annotation_packs" / "gharchive_batch", help="Output directory for per-repo annotation packs.")
-    gharchive_annotation_pack_batch.add_argument("--pack-prefix", default="gharchive_policy_pack", help="Stable pack id prefix.")
+    gharchive_annotation_pack_batch.add_argument("--output-dir", type=Path, default=GENERATED / "annotation_packs" / "gharchive_formal", help="Output directory for per-repo annotation packs.")
+    gharchive_annotation_pack_batch.add_argument("--pack-prefix", default="gharchive_formal_policy_pack", help="Stable pack id prefix.")
     export_annotation_release = sub.add_parser("export-annotation-pack-release")
     export_annotation_release.add_argument("batch_dir", type=Path, help="Directory produced by gharchive-annotation-pack-batch.")
-    export_annotation_release.add_argument("--output-dir", type=Path, default=GENERATED / "release_packaging" / "gharchive_annotation_pack", help="Output release directory.")
+    export_annotation_release.add_argument("--output-dir", type=Path, default=GENERATED / "release_packaging" / "gharchive_formal_annotation_pack", help="Output release directory.")
     export_annotation_release.add_argument("--dataset-name", default="gharchive_longuserpolicy_annotation_pack", help="Dataset/release name.")
     export_annotation_release.add_argument("--version", default="0.1.0", help="Release version.")
     gharchive_scale_summary = sub.add_parser("gharchive-scale-summary")
@@ -299,7 +387,7 @@ def main() -> None:
     rewrite_prompts_batch.add_argument("--prompt-version", default="v1", help="Prompt template version tag.")
     rewrite_jobs = sub.add_parser("package-policy-rewrite-jobs")
     rewrite_jobs.add_argument("prompt_export_dir", type=Path, help="Directory produced by export-policy-rewrite-prompts-batch.")
-    rewrite_jobs.add_argument("--output-dir", type=Path, default=GENERATED / "annotation_packs" / "rewrite_jobs", help="Output directory for annotation job shards.")
+    rewrite_jobs.add_argument("--output-dir", type=Path, default=GENERATED / "annotation_packs" / "gharchive_formal_rewrite_jobs", help="Output directory for annotation job shards.")
     rewrite_jobs.add_argument("--max-prompts-per-job", type=int, default=100, help="Maximum prompt records per job shard.")
     rewrite_jobs.add_argument("--max-estimated-tokens-per-job", type=int, default=120000, help="Approximate max prompt tokens per job shard.")
     rewrite_llm_job = sub.add_parser("run-policy-rewrite-llm-job")
@@ -338,7 +426,7 @@ def main() -> None:
     rewrite_llm_batch.add_argument("--merge-existing", action="store_true", help="Merge newly generated rows with existing proposal files by annotation_id.")
     collect_rewrite_jobs = sub.add_parser("collect-policy-rewrite-job-outputs")
     collect_rewrite_jobs.add_argument("rewrite_job_dir", type=Path, help="Directory produced by package-policy-rewrite-jobs.")
-    collect_rewrite_jobs.add_argument("--output", type=Path, default=GENERATED / "annotation_packs" / "rewrite_jobs" / "collected_rewrite_proposals.jsonl", help="Unified JSONL proposals output for validate-policy-rewrites-batch.")
+    collect_rewrite_jobs.add_argument("--output", type=Path, default=GENERATED / "annotation_packs" / "gharchive_formal_rewrite_jobs" / "collected_rewrite_proposals.jsonl", help="Unified JSONL proposals output for validate-policy-rewrites-batch.")
     collect_rewrite_jobs.add_argument("--report", type=Path, help="Optional collection report JSON path.")
     collect_rewrite_jobs.add_argument("--proposal-filename", default="proposals.jsonl", help="Completed proposal filename expected inside each job directory.")
     collect_rewrite_jobs.add_argument("--allow-incomplete", action="store_true", help="Write the collection report without exiting nonzero when jobs are missing or unfilled.")
@@ -346,16 +434,16 @@ def main() -> None:
     rewrite_project.add_argument("annotation_pack", type=Path, help="annotation_pack.json generated by gharchive-annotation-pack.")
     rewrite_project.add_argument("proposals", type=Path, help="Validated JSONL rewrite/probe proposals.")
     rewrite_project.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
-    rewrite_project.add_argument("--project-id", default="project_gharchive_rewrite_001", help="Project id for generated output.")
+    rewrite_project.add_argument("--project-id", default="project_gharchive_rewrite_single", help="Project id for generated output.")
     rewrite_project.add_argument("--validation-output", type=Path, help="Optional rewrite validation report path.")
     rewrite_project_batch = sub.add_parser("build-projects-from-rewrite-batch")
     rewrite_project_batch.add_argument("batch_validation_report", type=Path, help="batch_rewrite_validation_report.json from validate-policy-rewrites-batch.")
-    rewrite_project_batch.add_argument("--output-dir", type=Path, default=GENERATED / "projects", help="Project-centric generated output directory.")
-    rewrite_project_batch.add_argument("--project-prefix", default="project_gharchive_rewrite", help="Project id prefix for generated projects.")
+    rewrite_project_batch.add_argument("--output-dir", type=Path, default=GENERATED / "projects" / "gharchive_formal_batch", help="Project-centric generated output directory.")
+    rewrite_project_batch.add_argument("--project-prefix", default="project_gharchive_formal", help="Project id prefix for generated projects.")
     export_project_release = sub.add_parser("export-project-benchmark-release")
     export_project_release.add_argument("project_dirs", nargs="+", type=Path, help="Verifier-checked project directories to include.")
-    export_project_release.add_argument("--output-dir", type=Path, default=GENERATED / "release_packaging" / "project_benchmark", help="Output project benchmark release directory.")
-    export_project_release.add_argument("--dataset-name", default="longuserpolicy_project_benchmark", help="Dataset/release name.")
+    export_project_release.add_argument("--output-dir", type=Path, default=GENERATED / "release_packaging" / "gharchive_formal_project_benchmark", help="Output project benchmark release directory.")
+    export_project_release.add_argument("--dataset-name", default="longuserpolicy_gharchive_project_benchmark", help="Dataset/release name.")
     export_project_release.add_argument("--version", default="0.1.0", help="Release version.")
     export_project_release.add_argument("--copy-projects", action="store_true", help="Copy project files into the release directory instead of referencing existing project dirs.")
     export_project_release.add_argument("--allow-unverified", action="store_true", help="Allow projects whose verifier report does not pass.")
@@ -366,7 +454,7 @@ def main() -> None:
     verify_project_release.add_argument("--output", type=Path, help="Optional project release integrity report JSON path.")
     export_submission_inputs = sub.add_parser("export-project-submission-inputs")
     export_submission_inputs.add_argument("release_dir", type=Path, help="Project benchmark release directory.")
-    export_submission_inputs.add_argument("--output-dir", type=Path, default=GENERATED / "evaluation_harness" / "project_submission_inputs", help="Output no-gold submission input directory.")
+    export_submission_inputs.add_argument("--output-dir", type=Path, default=GENERATED / "evaluation_harness" / "gharchive_formal_submission_inputs", help="Output no-gold submission input directory.")
     export_submission_inputs.add_argument("--split", action="append", dest="splits", choices=["train", "dev", "test"], help="Release split to include. Repeat for multiple splits. Defaults to all splits.")
     export_submission_inputs.add_argument("--no-artifacts", action="store_true", help="Omit artifact rows from the input pack.")
     export_submission_inputs.add_argument("--no-events", action="store_true", help="Omit event rows from the input pack.")
@@ -388,6 +476,53 @@ def main() -> None:
     submission_probe_leakage.add_argument("input_dir", type=Path, help="No-gold submission input directory to audit.")
     submission_probe_leakage.add_argument("--output", type=Path, help="Optional probe leakage audit JSON path.")
     submission_probe_leakage.add_argument("--high-overlap-threshold", type=float, default=0.8, help="Overlap threshold used to count high-risk probe wording.")
+    taxonomy_coverage = sub.add_parser("audit-project-release-taxonomy-coverage")
+    taxonomy_coverage.add_argument("release_dir", type=Path, help="Project benchmark release directory.")
+    taxonomy_coverage.add_argument("--output", type=Path, help="Optional taxonomy/domain coverage audit JSON path.")
+    taxonomy_coverage.add_argument("--require-multi-domain", action="store_true", help="Fail unless at least two real workflow domains are covered.")
+    verify_taxonomy_coverage = sub.add_parser("verify-project-release-taxonomy-coverage")
+    verify_taxonomy_coverage.add_argument("report", type=Path, help="Report produced by audit-project-release-taxonomy-coverage.")
+    verify_taxonomy_coverage.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    claim_boundary = sub.add_parser("audit-paper-claim-boundaries")
+    claim_boundary.add_argument("--output", type=Path, default=GENERATED / "evaluation_harness" / "benchmark_release_claim_boundary_audit.json", help="Output benchmark release claim-boundary audit JSON path.")
+    claim_boundary.add_argument("--readiness-report", type=Path, help="Readiness report JSON.")
+    claim_boundary.add_argument("--taxonomy-coverage", type=Path, help="Taxonomy/domain coverage audit JSON.")
+    claim_boundary.add_argument("--workflow-source-audit", type=Path, help="Workflow source audit JSON.")
+    claim_boundary.add_argument("--hardened-probe-leakage-audit", type=Path, help="Hardened submission-input probe leakage audit JSON.")
+    claim_boundary.add_argument("--human-audit-report", type=Path, help="Human audit validation report JSON.")
+    claim_boundary.add_argument("--baseline-batch-report", type=Path, help="Baseline batch report JSON.")
+    claim_boundary.add_argument("--external-runner-report", type=Path, help="Optional executed external memory runner contract report JSON.")
+    verify_claim_boundary = sub.add_parser("verify-paper-claim-boundaries")
+    verify_claim_boundary.add_argument("report", type=Path, help="Claim-boundary audit JSON produced by audit-paper-claim-boundaries.")
+    verify_claim_boundary.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    claim_lint = sub.add_parser("lint-paper-claims")
+    claim_lint.add_argument("--output", type=Path, default=GENERATED / "evaluation_harness" / "gharchive_formal_claim_lint.json", help="Output benchmark release claim-lint JSON.")
+    claim_lint.add_argument("--root", type=Path, default=ROOT, help="Root used to resolve relative file paths.")
+    claim_lint.add_argument("--path", action="append", default=[], help="Markdown/text file to lint. Repeat for multiple files. Defaults to core paper-facing docs.")
+    verify_claim_lint = sub.add_parser("verify-paper-claim-lint")
+    verify_claim_lint.add_argument("report", type=Path, help="Paper claim lint JSON produced by lint-paper-claims.")
+    verify_claim_lint.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    verify_claim_lint.add_argument("--root", type=Path, help="Override root used to resolve source doc paths.")
+    artifact_bundle = sub.add_parser("audit-artifact-bundle")
+    artifact_bundle.add_argument("--output", type=Path, default=GENERATED / "evaluation_harness" / "benchmark_release_artifact_bundle_manifest.json", help="Output artifact bundle manifest JSON.")
+    artifact_bundle.add_argument("--root", type=Path, default=ROOT, help="Root used to resolve relative artifact paths.")
+    artifact_bundle.add_argument("--artifact", action="append", default=[], help="Additional or overriding artifact mapping in name=path form.")
+    verify_artifact_bundle = sub.add_parser("verify-artifact-bundle")
+    verify_artifact_bundle.add_argument("manifest", type=Path, help="Artifact bundle manifest JSON produced by audit-artifact-bundle.")
+    verify_artifact_bundle.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    benchmark_release_gate = sub.add_parser("benchmark-release-gate-report", help="Canonical formal benchmark release gate.")
+    _add_release_gate_args(benchmark_release_gate)
+    domain_expansion = sub.add_parser("audit-domain-expansion-readiness")
+    domain_expansion.add_argument("--output", type=Path, default=GENERATED / "evaluation_harness" / "gharchive_formal_domain_expansion_readiness.json", help="Output domain-expansion readiness JSON.")
+    domain_expansion.add_argument("--root", type=Path, default=ROOT, help="Root used to resolve relative report paths.")
+    domain_expansion.add_argument("--report", action="append", default=[], help="Additional or overriding report mapping in name=path form.")
+    domain_expansion.add_argument("--workflow-manifest-preflight", action="append", default=[], type=Path, help="Optional report produced by preflight-workflow-manifest-release. Repeat for multiple domains.")
+    domain_expansion.add_argument("--workflow-manifest-preflight-batch", action="append", default=[], type=Path, help="Optional report produced by preflight-workflow-manifest-release-batch. Repeat for multiple batches.")
+    domain_expansion.add_argument("--require-multi-domain", action="store_true", help="Fail unless at least two workflow domains are release-ready.")
+    verify_domain_expansion = sub.add_parser("verify-domain-expansion-readiness")
+    verify_domain_expansion.add_argument("report", type=Path, help="Domain-expansion readiness JSON produced by audit-domain-expansion-readiness.")
+    verify_domain_expansion.add_argument("--output", type=Path, help="Optional verification report JSON path.")
+    verify_domain_expansion.add_argument("--root", type=Path, help="Override root used to resolve input report paths.")
     release_integrity = sub.add_parser("verify-release-integrity")
     release_integrity.add_argument("release_dir", type=Path, help="Directory produced by export-annotation-pack-release.")
     release_integrity.add_argument("--prompt-export-dir", type=Path, help="Optional directory produced by export-policy-rewrite-prompts-batch.")
@@ -402,19 +537,15 @@ def main() -> None:
     paper_scale.add_argument("--output", type=Path, help="Optional paper-scale assessment JSON path.")
     paper_scale.add_argument("--allow-fail", action="store_true", help="Write/report the assessment without exiting nonzero when profile thresholds are not met.")
     paper_tables = sub.add_parser("export-paper-tables")
-    paper_tables.add_argument("--release-baseline-report", type=Path, default=GENERATED / "evaluation_harness" / "project_release_baselines.json", help="Release deterministic baseline report.")
+    paper_tables.add_argument("--release-baseline-report", type=Path, default=GENERATED / "evaluation_harness" / "gharchive_formal_project_release_baselines.json", help="Release deterministic baseline report.")
     paper_tables.add_argument("--prediction-report", action="append", dest="prediction_reports", type=Path, help="Release prediction scoring report. Repeat for multiple systems.")
     paper_tables.add_argument("--prediction-batch-report", action="append", dest="prediction_batch_reports", type=Path, help="Batch report from score-project-release-prediction-dir. Repeat for multiple batches.")
     paper_tables.add_argument("--bootstrap-samples", type=int, default=1000, help="Project-level bootstrap samples for confidence intervals.")
     paper_tables.add_argument("--bootstrap-seed", type=int, default=0, help="Seed for deterministic bootstrap confidence intervals.")
-    paper_tables.add_argument("--output-dir", type=Path, default=GENERATED / "evaluation_harness" / "paper_tables", help="Output directory for JSON/CSV/Markdown tables.")
+    paper_tables.add_argument("--output-dir", type=Path, default=GENERATED / "evaluation_harness" / "gharchive_formal_paper_tables", help="Output directory for JSON/CSV/Markdown tables.")
     verify = sub.add_parser("verify-project")
     verify.add_argument("project_dir", type=Path, help="Project directory containing artifacts/events/memory_graph/probes.")
     verify.add_argument("--output", type=Path, help="Optional verifier report output path.")
-    audit = sub.add_parser("audit")
-    audit.add_argument("--generated-dir", type=Path, default=GENERATED, help="Generated artifact directory to audit.")
-    audit.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
-    audit.add_argument("--output", type=Path, help="Optional path for the JSON audit report.")
     readiness = sub.add_parser("readiness-report")
     readiness.add_argument("--generated-dir", type=Path, default=GENERATED, help="Generated artifact directory to inspect.")
     readiness.add_argument("--output", type=Path, default=GENERATED / "readiness_report.json", help="Output JSON readiness report.")
@@ -422,7 +553,6 @@ def main() -> None:
     readiness.add_argument("--annotation-release-dir", type=Path, help="Optional annotation release directory.")
     readiness.add_argument("--prompt-export-dir", type=Path, help="Optional prompt export directory.")
     readiness.add_argument("--rewrite-job-dir", type=Path, help="Optional packaged rewrite annotation job directory.")
-    readiness.add_argument("--rewrite-project-dir", type=Path, help="Optional rewrite-derived project directory.")
     readiness.add_argument("--staged-slice-manifest", type=Path, help="Optional GHArchive staged slice manifest.")
     readiness.add_argument("--gharchive-stage-plan", type=Path, help="Optional GHArchive raw-slice stage-plan report.")
     readiness.add_argument("--scale-summary", type=Path, help="Optional GHArchive annotation scale summary.")
@@ -438,37 +568,15 @@ def main() -> None:
     readiness.add_argument("--paper-table-dir", type=Path, help="Optional paper-ready result table directory.")
     readiness.add_argument("--rewrite-human-audit", type=Path, help="Optional human audit validation report for LLM rewrite proposals.")
     readiness.add_argument("--probe-leakage-audit", type=Path, help="Optional probe-query lexical leakage audit report.")
+    readiness.add_argument("--taxonomy-coverage-audit", type=Path, help="Optional task taxonomy and workflow-domain coverage audit report.")
+    readiness.add_argument("--claim-boundary-audit", type=Path, help="Optional paper-facing claim boundary audit report.")
+    readiness.add_argument("--claim-lint", type=Path, help="Optional paper-facing claim lint report.")
+    readiness.add_argument("--artifact-bundle-manifest", type=Path, help="Optional reproducibility artifact bundle manifest.")
     readiness.add_argument("--paper-scale-profile", choices=["fixture", "pilot", "paper"], default="paper", help="Scale profile to assess inside readiness.")
     readiness.add_argument("--require-paper-scale", action="store_true", help="Fail readiness if the paper-scale profile is not met.")
-    sub.add_parser("validate")
     args = parser.parse_args()
 
-    if args.command == "smoke":
-        run_smoke_all()
-    elif args.command == "literature":
-        build_literature_map(ROOT / "tasks" / "literature_and_taxonomy" / "configs" / "paper_seeds.yaml", GENERATED / "literature_and_taxonomy")
-    elif args.command == "ingest":
-        ingest_seed_documents(ROOT / "examples" / "seed_documents.jsonl", GENERATED / "seed_corpora_ingestion" / "source_documents.jsonl")
-    elif args.command == "simulate":
-        simulate_personas(ROOT / "configs" / "persona_simulation.yaml", GENERATED / "persona_life_event_simulation" / "personas.jsonl")
-    elif args.command == "trajectories":
-        generate_trajectories(GENERATED / "persona_life_event_simulation" / "personas.jsonl", GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl")
-    elif args.command == "queries":
-        generate_queries(
-            GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-            GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-            GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-        )
-    elif args.command == "qc":
-        run_quality_control(
-            GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-            GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-            GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-            GENERATED / "annotation_and_quality_control",
-        )
-    elif args.command == "evaluate":
-        run_baseline_evaluation(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", GENERATED / "evaluation_harness" / "baseline_metrics.json")
-    elif args.command == "evaluate-project":
+    if args.command == "evaluate-project":
         output_path = args.output or (args.project_dir / "baseline_report.json")
         report = run_project_baseline_evaluation(args.project_dir, output_path, top_k=args.top_k, baseline_names=args.baselines)
         names = report["summary"]["baseline_names"]
@@ -498,6 +606,16 @@ def main() -> None:
         print(
             "action traces scored: "
             f"project={report['project_id']} traces={report['summary']['traces']} "
+            f"pass_rate={report['summary']['pass_rate']:.3f} "
+            f"boundary_violation_rate={report['summary']['boundary_violation_rate']:.3f}"
+        )
+    elif args.command == "score-project-release-action-traces":
+        output_path = args.output or (args.release_dir / "project_release_action_trace_report.json")
+        report = score_project_release_action_traces(args.release_dir, args.traces, output_path, system_name=args.system_name)
+        print(
+            "project release action traces scored: "
+            f"projects={report['summary']['projects']} traces={report['summary']['traces']} "
+            f"probe_coverage={report['summary']['probe_coverage']:.3f} "
             f"pass_rate={report['summary']['pass_rate']:.3f} "
             f"boundary_violation_rate={report['summary']['boundary_violation_rate']:.3f}"
         )
@@ -550,6 +668,12 @@ def main() -> None:
             report_path=args.report,
             allow_external=args.allow_external,
             system_name=args.system_name,
+            provider_config_path=args.provider_config,
+            model=args.model,
+            max_output_tokens=args.max_output_tokens,
+            request_timeout=args.request_timeout,
+            max_retries=args.max_retries,
+            retry_backoff_seconds=args.retry_backoff_seconds,
         )
         print(
             "memory submission baseline runner: "
@@ -620,8 +744,34 @@ def main() -> None:
             print(f"baseline config validated: name={report['baseline_name']} passed={report['passed']} issues={len(report['issues'])}")
         if not report["passed"]:
             raise SystemExit(1)
+    elif args.command == "verify-baseline-config-validation":
+        report = verify_baseline_config_validation_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "baseline config validation verified: "
+            f"passed={report['passed']} configs={report['summary']['configs_total']} "
+            f"verified={report['summary']['configs_verified']} issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-baseline-batch":
+        report = verify_baseline_batch_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "baseline batch verified: "
+            f"passed={report['passed']} reports={report['summary']['reports_total']} "
+            f"runner_reports={report['summary']['runner_reports_verified']} "
+            f"output_artifacts={report['summary']['output_artifacts_verified']} "
+            f"issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
     elif args.command == "run-baseline-config":
-        report = run_baseline_config(args.config, output_path=args.output, dry_run=args.dry_run, allow_llm_api=args.allow_llm_api)
+        report = run_baseline_config(
+            args.config,
+            output_path=args.output,
+            dry_run=args.dry_run,
+            allow_llm_api=args.allow_llm_api,
+            allow_external_runner=args.allow_external_runner,
+        )
         print(
             "baseline config runner: "
             f"name={report['baseline_name']} status={report['status']} executed={report['executed']} issues={len(report['issues'])}"
@@ -634,6 +784,7 @@ def main() -> None:
             args.output_dir,
             dry_run_external=not args.no_dry_run_external,
             allow_llm_api=args.allow_llm_api,
+            allow_external_runner=args.allow_external_runner,
         )
         print(
             "baseline config batch runner: "
@@ -655,8 +806,123 @@ def main() -> None:
             "public data discovery: "
             f"candidates={report['summary']['candidates_total']} usable={report['summary']['usable_sources']} "
             f"gharchive={report['summary']['gharchive_event_sources']} email_manifests={report['summary']['email_manifest_sources']} "
+            f"workflow_manifests={sum(int(report['summary'].get(key, 0)) for key in ['calendar_manifest_sources', 'docs_manifest_sources', 'chat_manifest_sources', 'browser_web_manifest_sources'])} "
             f"output={args.output}"
         )
+    elif args.command == "verify-public-data-discovery":
+        report = verify_public_data_discovery_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "public data discovery verified: "
+            f"passed={report['passed']} candidates={report['summary']['candidates_verified']}/{report['summary']['candidates_total']} "
+            f"issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "validate-workflow-manifest":
+        report = validate_workflow_manifest_adapter(
+            args.manifest,
+            output_path=args.output,
+            adapter=args.adapter,
+            redact_sensitive=not args.no_redact,
+        )
+        print(
+            "workflow manifest validated: "
+            f"passed={report['passed']} adapter={report['adapter']} domain={report['domain']} "
+            f"records={report['summary']['records']} events={report['summary']['events']} issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "build-enron-email-workflow-manifest":
+        report = build_enron_email_workflow_manifest(
+            args.tarball,
+            args.output,
+            project_id=args.project_id,
+            max_records=args.max_records,
+            max_body_chars=args.max_body_chars,
+        )
+        print(
+            "Enron email workflow manifest built: "
+            f"passed={report['passed']} project={report['project_id']} "
+            f"records={report['summary']['records']} probes={report['summary']['probes']} "
+            f"output={report['manifest_path']}"
+        )
+    elif args.command == "build-project-from-workflow-manifest":
+        report = build_project_from_workflow_manifest(
+            args.manifest,
+            args.output_dir,
+            output_report_path=args.report,
+            adapter=args.adapter,
+            redact_sensitive=not args.no_redact,
+        )
+        print(
+            "workflow manifest project built: "
+            f"passed={report['passed']} project={report['project_id']} domain={report['domain']} "
+            f"events={report['summary']['events']} memories={report['summary']['memories']} "
+            f"probes={report['summary']['probes']} verifier_passed={report['summary']['verifier_passed']} "
+            f"project_dir={report['project_dir']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "preflight-workflow-manifest-release":
+        output_report = args.report or (args.output_dir / "workflow_manifest_release_preflight.json")
+        report = preflight_workflow_manifest_release(
+            args.manifest,
+            args.output_dir,
+            output_report_path=output_report,
+            adapter=args.adapter,
+            redact_sensitive=not args.no_redact,
+            dataset_name=args.dataset_name,
+            version=args.version,
+            baseline_names=args.baselines or None,
+            top_k=args.top_k,
+            harden_probe_queries=args.harden_probe_queries,
+        )
+        print(
+            "workflow manifest release preflight: "
+            f"passed={report['passed']} project={report['project_id']} domain={report['domain']} "
+            f"scope={report['summary']['release_scope']} checks={report['summary']['checks_passed']}/{report['summary']['checks_total']} "
+            f"issues={report['summary']['issues']} output={output_report}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "preflight-workflow-manifest-release-batch":
+        output_report = args.report or (args.output_dir / "workflow_manifest_preflight_batch_report.json")
+        report = preflight_workflow_manifest_release_batch(
+            args.manifest,
+            args.output_dir,
+            output_report_path=output_report,
+            adapter=args.adapter,
+            redact_sensitive=not args.no_redact,
+            version=args.version,
+            baseline_names=args.baselines or None,
+            top_k=args.top_k,
+            harden_probe_queries=args.harden_probe_queries,
+        )
+        print(
+            "workflow manifest preflight batch: "
+            f"passed={report['passed']} reports={report['summary']['reports_passed']}/{report['summary']['reports_total']} "
+            f"domains={','.join(report['summary']['domains'])} issues={report['summary']['issues']} output={output_report}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-workflow-manifest-preflight":
+        report = verify_workflow_manifest_preflight_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "workflow manifest preflight verified: "
+            f"passed={report['passed']} artifacts={report['summary']['artifacts_verified']}/{report['summary']['artifacts_total']} "
+            f"issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-workflow-manifest-preflight-batch":
+        report = verify_workflow_manifest_preflight_batch_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "workflow manifest preflight batch verified: "
+            f"passed={report['passed']} reports={report['summary']['reports_verified']}/{report['summary']['reports_total']} "
+            f"issues={report['summary']['issues']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
     elif args.command == "audit-workflow-data-sources":
         report = audit_workflow_data_sources(
             args.discovery_report,
@@ -672,66 +938,16 @@ def main() -> None:
         )
         if not report["passed"]:
             raise SystemExit(1)
-    elif args.command == "release":
-        package_release(
-            GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-            GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-            GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-            GENERATED / "release_packaging",
-        )
-    elif args.command == "stress":
-        report = compute_stress_profiles(
-            GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-            GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-            GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-            GENERATED / "evaluation_harness" / "stress_profile.json",
-        )
-        print(f"stress profiles written: trajectories={report['summary']['trajectories']} max_horizon_days={report['summary']['max_horizon_days']}")
-    elif args.command == "grounded-pilot":
-        summary = run_manual_grounded_pilot(args.output_dir)
-        report = run_project_verifier(Path(summary["project_dir"]))
-        print(f"grounded pilot written: project={summary['project_id']} probes={summary['probes']} verifier_passed={report.passed}")
-        if not report.passed:
-            raise SystemExit(f"grounded pilot verifier failed: {report.issues}")
-    elif args.command == "github-fixture-pilot":
-        summary = run_github_fixture_pilot(args.output_dir)
-        report = run_project_verifier(Path(summary["project_dir"]))
-        print(f"github fixture pilot written: project={summary['project_id']} probes={summary['probes']} verifier_passed={report.passed}")
-        if not report.passed:
-            raise SystemExit(f"github fixture verifier failed: {report.issues}")
-    elif args.command == "gharchive-pilot":
-        summary = run_gharchive_pilot(
-            args.output_dir,
-            input_path=args.input,
-            repo_full_name=args.repo,
-            project_id=args.project_id,
-            max_records=args.max_records,
-        )
-        report = run_project_verifier(Path(summary["project_dir"]))
-        print(f"gharchive pilot written: project={summary['project_id']} events={summary['events']} probes={summary['probes']} verifier_passed={report.passed}")
-        if not report.passed:
-            raise SystemExit(f"gharchive verifier failed: {report.issues}")
-    elif args.command == "gharchive-batch-pilot":
-        summary = run_gharchive_batch_pilot(
-            args.output_dir,
-            input_path=args.input,
-            repos=args.repos,
-            project_prefix=args.project_prefix,
-            max_records_per_repo=args.max_records_per_repo,
-        )
-        failed = []
-        for project in summary["projects"]:
-            report = run_project_verifier(Path(project["project_dir"]))
-            if not report.passed:
-                failed.append({"project_id": project["project_id"], "issues": report.issues})
+    elif args.command == "verify-workflow-data-source-audit":
+        report = verify_workflow_data_source_audit(args.report, output_path=args.output)
         print(
-            "gharchive batch pilot written: "
-            f"projects={summary['project_count']} skipped={len(summary['skipped'])} verifier_failed={len(failed)}"
+            "workflow data source audit verified: "
+            f"passed={report['passed']} issues={report['summary']['issues']} "
+            f"discovery_candidates={report['summary']['discovery_verification'].get('candidates_verified')}/"
+            f"{report['summary']['discovery_verification'].get('candidates_total')}"
         )
-        if summary["project_count"] == 0:
-            raise SystemExit(f"gharchive batch produced no eligible projects; skipped={summary['skipped']}")
-        if failed:
-            raise SystemExit(f"gharchive batch verifier failed: {failed}")
+        if not report["passed"]:
+            raise SystemExit(1)
     elif args.command == "gharchive-build-slice":
         manifest = build_gharchive_slice(
             args.input,
@@ -1096,6 +1312,150 @@ def main() -> None:
             f"high_any={report['summary']['high_any_overlap_probes']} "
             f"missing_gold_keys={report['summary'].get('missing_gold_keys', 0)}"
         )
+    elif args.command == "audit-project-release-taxonomy-coverage":
+        report = audit_project_release_taxonomy_coverage(
+            args.release_dir,
+            output_path=args.output,
+            require_multi_domain=args.require_multi_domain,
+        )
+        print(
+            "project release taxonomy coverage audited: "
+            f"passed={report['passed']} scope={report['summary']['current_release_domain_scope']} "
+            f"domains={','.join(report['summary']['covered_workflow_domains']) or 'none'} "
+            f"task_types={report['summary']['task_types']} capabilities={report['summary']['capabilities_covered']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-project-release-taxonomy-coverage":
+        report = verify_project_release_taxonomy_coverage_audit(args.report, output_path=args.output)
+        print(
+            "project release taxonomy coverage verified: "
+            f"passed={report['passed']} issues={report['summary']['issues']} "
+            f"release_dir={report['summary']['release_dir']}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-paper-claim-boundaries":
+        report = audit_paper_claim_boundaries(
+            output_path=args.output,
+            readiness_report_path=args.readiness_report,
+            taxonomy_coverage_path=args.taxonomy_coverage,
+            workflow_source_audit_path=args.workflow_source_audit,
+            hardened_probe_leakage_audit_path=args.hardened_probe_leakage_audit,
+            human_audit_report_path=args.human_audit_report,
+            baseline_batch_report_path=args.baseline_batch_report,
+            external_runner_report_path=args.external_runner_report,
+        )
+        print(
+            "paper claim boundaries audited: "
+            f"supported={report['summary']['supported']} qualified={report['summary']['qualified']} "
+            f"blocked={report['summary']['blocked']} output={args.output}"
+        )
+    elif args.command == "verify-paper-claim-boundaries":
+        report = verify_paper_claim_boundary_audit(args.report, output_path=args.output)
+        print(
+            "paper claim boundaries verified: "
+            f"passed={report['passed']} issues={report['summary']['issues']} "
+            f"original_supported={report['summary'].get('original_supported')} recomputed_supported={report['summary'].get('recomputed_supported')} "
+            f"original_blocked={report['summary'].get('original_blocked')} recomputed_blocked={report['summary'].get('recomputed_blocked')}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "lint-paper-claims":
+        paths = [Path(path) for path in args.path] if args.path else [Path(path) for path in DEFAULT_CLAIM_LINT_PATHS]
+        report = lint_paper_claims(paths, output_path=args.output, root=args.root)
+        print(
+            "paper claims linted: "
+            f"passed={report['passed']} files={report['summary']['files_scanned']}/{report['summary']['files_total']} "
+            f"issues={report['summary']['issues']} allowed_mentions={report['summary']['allowed_blocked_claim_mentions']} output={args.output}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-paper-claim-lint":
+        report = verify_paper_claim_lint_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "paper claim lint verified: "
+            f"passed={report['passed']} files={report['summary']['files_verified']}/{report['summary']['files_total']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} report={args.report}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-artifact-bundle":
+        artifacts = {name: Path(path) for name, path in DEFAULT_BENCHMARK_RELEASE_ARTIFACTS.items()}
+        for item in args.artifact:
+            if "=" not in item:
+                raise SystemExit(f"--artifact must be name=path, got: {item}")
+            name, path = item.split("=", 1)
+            artifacts[name] = Path(path)
+        report = audit_artifact_bundle(artifacts, output_path=args.output, root=args.root)
+        print(
+            "artifact bundle audited: "
+            f"passed={report['passed']} artifacts={report['summary']['artifacts_present']}/{report['summary']['artifacts_total']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} output={args.output}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-artifact-bundle":
+        report = verify_artifact_bundle_manifest(args.manifest, output_path=args.output)
+        print(
+            "artifact bundle verified: "
+            f"passed={report['passed']} artifacts={report['summary']['artifacts_verified']}/{report['summary']['artifacts_total']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} manifest={args.manifest}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "benchmark-release-gate-report":
+        reports = {name: Path(path) for name, path in DEFAULT_GATE_REPORTS.items()}
+        for item in args.report:
+            if "=" not in item:
+                raise SystemExit(f"--report must be name=path, got: {item}")
+            name, path = item.split("=", 1)
+            reports[name] = Path(path)
+        for index, path in enumerate(args.workflow_manifest_preflight):
+            reports[f"workflow_manifest_preflight_{index}"] = Path(path)
+        for index, path in enumerate(args.workflow_manifest_preflight_batch):
+            reports[f"workflow_manifest_preflight_batch_{index}"] = Path(path)
+        report = build_benchmark_release_gate_report(reports, output_path=args.output, root=args.root)
+        print(
+            "benchmark release gate report: "
+            f"passed={report['passed']} reports={report['summary']['reports_present']}/{report['summary']['reports_total']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} output={args.output}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "audit-domain-expansion-readiness":
+        reports = {name: Path(path) for name, path in DEFAULT_DOMAIN_EXPANSION_REPORTS.items()}
+        for item in args.report:
+            if "=" not in item:
+                raise SystemExit(f"--report must be name=path, got: {item}")
+            name, path = item.split("=", 1)
+            reports[name] = Path(path)
+        report = build_domain_expansion_readiness_report(
+            reports,
+            output_path=args.output,
+            root=args.root,
+            require_multi_domain=args.require_multi_domain,
+            workflow_manifest_preflight_reports=args.workflow_manifest_preflight,
+            workflow_manifest_preflight_batch_reports=args.workflow_manifest_preflight_batch,
+        )
+        print(
+            "domain expansion readiness audited: "
+            f"passed={report['passed']} ready_domains={len(report['summary']['release_ready_domains'])} "
+            f"multi_domain_ready={report['summary']['multi_domain_release_ready']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} output={args.output}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
+    elif args.command == "verify-domain-expansion-readiness":
+        report = verify_domain_expansion_readiness_report(args.report, output_path=args.output, root=args.root)
+        print(
+            "domain expansion readiness verified: "
+            f"passed={report['passed']} inputs={report['summary']['inputs_verified']}/{report['summary']['inputs_total']} "
+            f"issues={report['summary']['issues']} warnings={report['summary']['warnings']} report={args.report}"
+        )
+        if not report["passed"]:
+            raise SystemExit(1)
     elif args.command == "verify-release-integrity":
         report = verify_annotation_release_integrity(args.release_dir, prompt_export_dir=args.prompt_export_dir, output_path=args.output)
         print(
@@ -1141,20 +1501,6 @@ def main() -> None:
         print(f"verified project={report.project_id} passed={report.passed} issues={len(report.issues)}")
         if not report.passed:
             raise SystemExit(1)
-    elif args.command == "validate":
-        validate_generated()
-    elif args.command == "audit":
-        report = audit_generated(args.generated_dir)
-        if args.output:
-            write_json(args.output, report)
-        if args.json:
-            import json
-
-            print(json.dumps(report, indent=2, sort_keys=True))
-        else:
-            print(format_audit_text(report))
-        if not report["passed"]:
-            raise SystemExit(1)
     elif args.command == "readiness-report":
         report = build_readiness_report(
             args.generated_dir,
@@ -1163,7 +1509,6 @@ def main() -> None:
             annotation_release_dir=args.annotation_release_dir,
             prompt_export_dir=args.prompt_export_dir,
             rewrite_job_dir=args.rewrite_job_dir,
-            rewrite_project_dir=args.rewrite_project_dir,
             staged_slice_manifest=args.staged_slice_manifest,
             gharchive_stage_plan_path=args.gharchive_stage_plan,
             scale_summary_path=args.scale_summary,
@@ -1179,6 +1524,10 @@ def main() -> None:
             paper_table_dir=args.paper_table_dir,
             rewrite_human_audit_path=args.rewrite_human_audit,
             probe_leakage_audit_path=args.probe_leakage_audit,
+            taxonomy_coverage_audit_path=args.taxonomy_coverage_audit,
+            claim_boundary_audit_path=args.claim_boundary_audit,
+            claim_lint_path=args.claim_lint,
+            artifact_bundle_manifest_path=args.artifact_bundle_manifest,
             paper_scale_profile=args.paper_scale_profile,
             require_paper_scale=args.require_paper_scale,
         )
@@ -1189,53 +1538,6 @@ def main() -> None:
         )
         if not report["passed"]:
             raise SystemExit(1)
-
-
-def run_smoke_all() -> None:
-    build_literature_map(ROOT / "tasks" / "literature_and_taxonomy" / "configs" / "paper_seeds.yaml", GENERATED / "literature_and_taxonomy")
-    ingest_seed_documents(ROOT / "examples" / "seed_documents.jsonl", GENERATED / "seed_corpora_ingestion" / "source_documents.jsonl")
-    simulate_personas(ROOT / "configs" / "persona_simulation.yaml", GENERATED / "persona_life_event_simulation" / "personas.jsonl")
-    generate_trajectories(GENERATED / "persona_life_event_simulation" / "personas.jsonl", GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl")
-    generate_queries(
-        GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-        GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-        GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-    )
-    report = run_quality_control(
-        GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-        GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-        GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-        GENERATED / "annotation_and_quality_control",
-    )
-    run_baseline_evaluation(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", GENERATED / "evaluation_harness" / "baseline_metrics.json")
-    compute_stress_profiles(
-        GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-        GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-        GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-        GENERATED / "evaluation_harness" / "stress_profile.json",
-    )
-    package_release(
-        GENERATED / "persona_life_event_simulation" / "personas.jsonl",
-        GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl",
-        GENERATED / "memory_challenge_query_generation" / "queries.jsonl",
-        GENERATED / "release_packaging",
-    )
-    if not report.passed:
-        raise SystemExit(f"QC failed: {report.issues}")
-    print("offline smoke pipeline completed")
-
-
-def validate_generated() -> None:
-    from ultra_long_benchmark.models import MemoryChallengeQuery, PersonaTimeline, SourceDocument, Trajectory
-    from ultra_long_benchmark.validation import validate_jsonl
-
-    checks = {
-        "source_documents": validate_jsonl(GENERATED / "seed_corpora_ingestion" / "source_documents.jsonl", SourceDocument),
-        "personas": validate_jsonl(GENERATED / "persona_life_event_simulation" / "personas.jsonl", PersonaTimeline),
-        "trajectories": validate_jsonl(GENERATED / "multi_session_agent_trajectory_generation" / "trajectories.jsonl", Trajectory),
-        "queries": validate_jsonl(GENERATED / "memory_challenge_query_generation" / "queries.jsonl", MemoryChallengeQuery),
-    }
-    print("validated " + ", ".join(f"{key}={value}" for key, value in checks.items()))
 
 
 if __name__ == "__main__":

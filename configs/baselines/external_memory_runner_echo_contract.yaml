@@ -1,0 +1,33 @@
+baseline:
+  name: external_memory_runner_echo_contract
+  family: memory_system_contract
+  description: No-gold external memory runner plugin contract example; not a competitive baseline.
+  entrypoint: ultra_long_benchmark.cli:run-external-memory-submission-runner
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external_runner
+data:
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/gharchive_formal_echo_policy_runner_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_formal_echo_policy_runner_report.json
+evaluation:
+  mode: external_memory_submission_runner
+  runner: examples.external_memory_adapters.echo_policy_runner:run
+  runner_config:
+    max_events: 3
+  allow_partial: false
+  metrics:
+    - prediction_coverage
+    - no_gold_input_contract
+    - plugin_runner_contract
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 2
+  mem: 8G
+  time: "00:10:00"
+reproducibility:
+  seed: 0
+  deterministic: true
+  notes: Contract example only. The baseline config runner dry-runs external runner configs by default; use --no-dry-run-external --allow-external-runner to execute.

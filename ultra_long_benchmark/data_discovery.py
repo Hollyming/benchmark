@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any, Iterable
 
-from ultra_long_benchmark.shared.io import write_json
+from ultra_long_benchmark.shared.io import read_json, write_json
 
 
 DEFAULT_PUBLIC_ROOTS = [Path("/home/jmzhang/Workspace/data"), Path("/data1/public"), Path("/data1/public/hf")]
@@ -19,7 +20,15 @@ HIGH_VALUE_NAME_MARKERS = (
     "enron",
     "avocado",
     "email",
+    "calendar",
+    "docs",
+    "document",
+    "chat",
+    "browser",
+    "search",
 )
+
+WORKFLOW_MANIFEST_DOMAINS = {"calendar_workflow", "docs_workflow", "chat_workflow", "browser_web_workflow"}
 
 
 def discover_public_data_sources(
@@ -34,8 +43,8 @@ def discover_public_data_sources(
 
     The scanner is intentionally conservative. It reports GHArchive-compatible
     workflow event files as directly usable, marks code-only GitHub corpora as
-    not sufficient for user-policy trajectories, and treats email corpora as
-    gated unless they provide the manifest required by EmailWorkflowAdapter.
+    not sufficient for user-policy trajectories, and treats non-GitHub workflow
+    corpora as gated unless they provide reviewed manifest-first metadata.
     """
 
     root_paths = [Path(root) for root in (roots or DEFAULT_PUBLIC_ROOTS)]
@@ -66,6 +75,7 @@ def discover_public_data_sources(
 
     summary = _summary(candidates)
     report = {
+        "root": str(Path.cwd()),
         "roots_requested": [str(root) for root in root_paths],
         "roots_existing": existing_roots,
         "roots_missing": missing_roots,
@@ -80,6 +90,138 @@ def discover_public_data_sources(
     if output_path is not None:
         write_json(output_path, report)
     return report
+
+
+def verify_public_data_discovery_report(
+    report_path: Path,
+    output_path: Path | None = None,
+    *,
+    root: Path | None = None,
+) -> dict[str, Any]:
+    """Verify that a public-data discovery report still matches candidate files."""
+
+    report_path = Path(report_path)
+    issues: list[dict[str, str]] = []
+    candidate_results: dict[str, dict[str, Any]] = {}
+    if not report_path.exists():
+        report = {
+            "passed": False,
+            "report_path": str(report_path),
+            "summary": {
+                "candidates_total": 0,
+                "candidates_verified": 0,
+                "issues": 1,
+                "issue_codes": ["public_data_discovery_report_missing"],
+            },
+            "candidates": {},
+            "issues": [{"code": "public_data_discovery_report_missing", "message": "public data discovery report is missing", "path": str(report_path)}],
+        }
+        if output_path is not None:
+            write_json(output_path, report)
+        return report
+
+    source = read_json(report_path)
+    source_root = Path(root or source.get("root") or Path.cwd())
+    candidates = source.get("candidates", [])
+    if not isinstance(candidates, list):
+        _issue(issues, "public_data_discovery_candidates_invalid", "public data discovery report candidates must be a list", report_path)
+        candidates = []
+    _check_discovery_summary(source, candidates, issues, report_path)
+
+    for index, expected in enumerate(candidates):
+        if not isinstance(expected, dict):
+            _issue(issues, "public_data_discovery_candidate_invalid", f"candidate record is not an object: {index}", report_path)
+            continue
+        path = _resolve_path(Path(str(expected.get("path", ""))), source_root)
+        key = str(expected.get("path") or f"candidate_{index}")
+        result = {
+            "path": str(path),
+            "dataset_kind": expected.get("dataset_kind"),
+            "expected_sha256": expected.get("sha256"),
+            "expected_bytes": expected.get("bytes"),
+            "actual_sha256": None,
+            "actual_bytes": None,
+            "passed": True,
+        }
+        candidate_results[key] = result
+        if not path.exists():
+            result["passed"] = False
+            _issue(issues, "public_data_candidate_missing", f"discovered candidate file is missing: {key}", path)
+            continue
+        if not expected.get("sha256"):
+            result["passed"] = False
+            _issue(issues, "public_data_candidate_digest_missing", f"discovered candidate lacks sha256: {key}", path)
+            continue
+        actual_sha256 = _file_sha256(path)
+        actual_bytes = path.stat().st_size
+        result["actual_sha256"] = actual_sha256
+        result["actual_bytes"] = actual_bytes
+        if expected.get("sha256") != actual_sha256:
+            result["passed"] = False
+            _issue(issues, "public_data_candidate_sha256_mismatch", f"discovered candidate changed: {key}", path)
+        if expected.get("bytes") is not None and expected.get("bytes") != actual_bytes:
+            result["passed"] = False
+            _issue(issues, "public_data_candidate_bytes_mismatch", f"discovered candidate size changed: {key}", path)
+
+    summary = {
+        "candidates_total": len(candidate_results),
+        "candidates_verified": sum(1 for result in candidate_results.values() if result["passed"]),
+        "usable_sources": source.get("summary", {}).get("usable_sources") if isinstance(source.get("summary"), dict) else None,
+        "issues": len(issues),
+        "issue_codes": sorted({issue["code"] for issue in issues}),
+    }
+    report = {
+        "passed": not issues,
+        "report_path": str(report_path),
+        "root": str(source_root),
+        "source_summary": source.get("summary", {}),
+        "summary": summary,
+        "candidates": candidate_results,
+        "issues": issues,
+    }
+    if output_path is not None:
+        write_json(output_path, report)
+    return report
+
+
+def _check_discovery_summary(
+    source: dict[str, Any],
+    candidates: list[Any],
+    issues: list[dict[str, str]],
+    report_path: Path,
+) -> None:
+    source_summary = source.get("summary", {}) if isinstance(source.get("summary"), dict) else {}
+    records = [item for item in candidates if isinstance(item, dict)]
+    recomputed = _summary(records)
+    for key in [
+        "candidates_total",
+        "usable_sources",
+        "gharchive_event_sources",
+        "email_manifest_sources",
+        "calendar_manifest_sources",
+        "docs_manifest_sources",
+        "chat_manifest_sources",
+        "browser_web_manifest_sources",
+        "github_code_only_sources",
+        "by_kind",
+    ]:
+        if source_summary.get(key) != recomputed.get(key):
+            _issue(
+                issues,
+                f"public_data_discovery_summary_{key}_mismatch",
+                f"public data discovery summary {key} does not match candidate records",
+                report_path,
+            )
+    usable = source.get("usable_sources", [])
+    non_usable = source.get("non_usable_but_relevant", [])
+    if not isinstance(usable, list):
+        _issue(issues, "public_data_discovery_usable_sources_invalid", "public data discovery usable_sources must be a list", report_path)
+    elif len(usable) != recomputed["usable_sources"]:
+        _issue(issues, "public_data_discovery_usable_sources_mismatch", "public data discovery usable_sources does not match candidate records", report_path)
+    if not isinstance(non_usable, list):
+        _issue(issues, "public_data_discovery_non_usable_sources_invalid", "public data discovery non_usable_but_relevant must be a list", report_path)
+    elif len(non_usable) != recomputed["candidates_total"] - recomputed["usable_sources"]:
+        _issue(issues, "public_data_discovery_non_usable_sources_mismatch", "public data discovery non_usable_but_relevant does not match candidate records", report_path)
 
 
 def _iter_candidate_files(root: Path, *, max_depth: int) -> Iterable[Path]:
@@ -131,6 +273,24 @@ def _classify_candidate(path: Path, *, sample_records: int) -> dict[str, Any] | 
             constraints=["requires manifest-declared redistribution", "requires privacy_review.status=passed", "requires pii_redaction=true"],
         )
 
+    manifest_domains = sorted(
+        str(record.get("domain"))
+        for record, kind in zip(samples, sample_kinds)
+        if kind == "workflow_trace_manifest"
+    )
+    if manifest_domains:
+        domain = manifest_domains[0]
+        evidence.append(f"manifest matches WorkflowManifestAdapter gate for {domain}")
+        return _candidate(
+            path,
+            dataset_kind=f"{domain}_manifest",
+            confidence=0.86,
+            usable=True,
+            evidence=evidence,
+            recommended_action=f"Load with WorkflowManifestAdapter, then implement {domain} verifier/no-gold/baseline release gates before claims.",
+            constraints=["requires manifest-declared redistribution", "requires privacy_review.status=passed", "requires pii_redaction=true"],
+        )
+
     if "gharchive" in lowered or "gh_archive" in lowered or "githubarchive" in lowered:
         evidence.append("path name suggests GHArchive but sampled records did not match event schema")
         return _candidate(
@@ -154,6 +314,26 @@ def _classify_candidate(path: Path, *, sample_records: int) -> dict[str, Any] | 
             recommended_action="Create a reviewed EmailWorkflowAdapter manifest with license, redistribution, privacy review, and PII redaction.",
             constraints=["do not load raw email without manifest", "license/privacy review required"],
         )
+
+    for marker, domain in [
+        ("calendar", "calendar_workflow"),
+        ("docs", "docs_workflow"),
+        ("document", "docs_workflow"),
+        ("chat", "chat_workflow"),
+        ("browser", "browser_web_workflow"),
+        ("search", "browser_web_workflow"),
+    ]:
+        if marker in lowered:
+            evidence.append(f"path name suggests {domain} traces but no approved manifest was detected")
+            return _candidate(
+                path,
+                dataset_kind=f"{domain}_requires_manifest",
+                confidence=0.32,
+                usable=False,
+                evidence=evidence,
+                recommended_action=f"Create a reviewed WorkflowManifestAdapter manifest for {domain} with license, redistribution, privacy review, and PII redaction.",
+                constraints=["do not load raw workflow traces without manifest", "license/privacy review required"],
+            )
 
     if any(kind == "github_code_corpus" for kind in sample_kinds) or "github_sample" in lowered:
         evidence.append("sample/path suggests GitHub code text, not workflow event timeline")
@@ -242,6 +422,8 @@ def _record_kind(record: dict[str, Any]) -> str:
         return "gharchive_event"
     if _is_email_workflow_manifest(record):
         return "email_workflow_manifest"
+    if _is_workflow_trace_manifest(record):
+        return "workflow_trace_manifest"
     if _is_github_code_record(record):
         return "github_code_corpus"
     return "unknown"
@@ -261,7 +443,24 @@ def _is_email_workflow_manifest(record: dict[str, Any]) -> bool:
     redistribution = record.get("redistribution", {})
     privacy = record.get("privacy_review", {})
     return (
+        record.get("domain") in {None, "email_workflow"}
+        and
         isinstance(record.get("records"), list)
+        and bool(record.get("license"))
+        and isinstance(redistribution, dict)
+        and redistribution.get("allowed") is True
+        and isinstance(privacy, dict)
+        and privacy.get("status") == "passed"
+        and privacy.get("pii_redaction") is True
+    )
+
+
+def _is_workflow_trace_manifest(record: dict[str, Any]) -> bool:
+    redistribution = record.get("redistribution", {})
+    privacy = record.get("privacy_review", {})
+    return (
+        record.get("domain") in WORKFLOW_MANIFEST_DOMAINS
+        and isinstance(record.get("records"), list)
         and bool(record.get("license"))
         and isinstance(redistribution, dict)
         and redistribution.get("allowed") is True
@@ -288,11 +487,14 @@ def _candidate(
     recommended_action: str,
     constraints: list[str],
 ) -> dict[str, Any]:
+    stat = path.stat()
     return {
         "path": str(path),
         "dataset_kind": dataset_kind,
         "confidence": confidence,
         "usable_for_longuserpolicy": usable,
+        "bytes": stat.st_size,
+        "sha256": _file_sha256(path),
         "evidence": evidence,
         "recommended_action": recommended_action,
         "constraints": constraints,
@@ -309,6 +511,10 @@ def _summary(candidates: list[dict[str, Any]]) -> dict[str, Any]:
         "usable_sources": sum(1 for item in candidates if item["usable_for_longuserpolicy"] is True),
         "gharchive_event_sources": by_kind.get("gharchive_public_events", 0),
         "email_manifest_sources": by_kind.get("email_workflow_manifest", 0),
+        "calendar_manifest_sources": by_kind.get("calendar_workflow_manifest", 0),
+        "docs_manifest_sources": by_kind.get("docs_workflow_manifest", 0),
+        "chat_manifest_sources": by_kind.get("chat_workflow_manifest", 0),
+        "browser_web_manifest_sources": by_kind.get("browser_web_workflow_manifest", 0),
         "github_code_only_sources": by_kind.get("github_code_corpus_not_workflow", 0),
         "by_kind": dict(sorted(by_kind.items())),
     }
@@ -320,6 +526,14 @@ def _recommended_next_actions(summary: dict[str, Any], candidates: list[dict[str
         actions.append("No local GHArchive workflow event source was found; stage GHArchive hourly JSON/JSONL/GZ files or BigQuery exports before paper-scale runs.")
     if summary.get("email_manifest_sources", 0) <= 0:
         actions.append("No approved email workflow manifest was found; do not ingest Enron/Avocado-style email until license/privacy manifests are prepared.")
+    for key, label in [
+        ("calendar_manifest_sources", "calendar"),
+        ("docs_manifest_sources", "docs"),
+        ("chat_manifest_sources", "chat"),
+        ("browser_web_manifest_sources", "browser/web-search"),
+    ]:
+        if summary.get(key, 0) <= 0:
+            actions.append(f"No approved {label} workflow manifest was found; keep this domain planned until reusable traces and privacy gates are prepared.")
     if summary.get("github_code_only_sources", 0) > 0:
         actions.append("GitHub code corpora were found, but they are not substitutes for longitudinal workflow trajectories.")
     if any(item["dataset_kind"] == "possible_gharchive_unverified" for item in candidates):
@@ -371,4 +585,43 @@ def _authoritative_source_plan(summary: dict[str, Any]) -> list[dict[str, Any]]:
             "pipeline_entry": "release probes -> environment runner -> action/state verifier",
             "license_privacy_notes": "Rules are often explicit; LongUserPolicyBench should hide user-specific policies in prior traces instead of task prompts.",
         },
+        {
+            "source": "Manifest-first calendar/docs/chat/browser traces",
+            "domain": "non-GitHub personal or enterprise workflow traces",
+            "reuse_role": "future multi-domain longitudinal workflow evidence after reviewed manifest gates pass",
+            "current_local_status": (
+                "usable_manifest_found"
+                if any(
+                    int(summary.get(key, 0)) > 0
+                    for key in [
+                        "calendar_manifest_sources",
+                        "docs_manifest_sources",
+                        "chat_manifest_sources",
+                        "browser_web_manifest_sources",
+                    ]
+                )
+                else "manifest_required"
+            ),
+            "pipeline_entry": "WorkflowManifestAdapter manifest -> domain verifier/no-gold/baseline release gates",
+            "license_privacy_notes": "Do not ingest raw calendar/docs/chat/browser traces directly; require redistribution permission, privacy review, and PII redaction manifest.",
+        },
     ]
+
+
+def _resolve_path(path: Path, root: Path) -> Path:
+    return path if path.is_absolute() else root / path
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _issue(issues: list[dict[str, str]], code: str, message: str, path: Path | str | None = None) -> None:
+    item = {"code": code, "message": message}
+    if path is not None:
+        item["path"] = str(path)
+    issues.append(item)

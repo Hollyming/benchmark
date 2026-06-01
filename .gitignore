@@ -7,6 +7,7 @@ __pycache__/
 venv/
 *.egg-info/
 .env
+opencode.json
 .cache/
 data/raw/
 data/interim/

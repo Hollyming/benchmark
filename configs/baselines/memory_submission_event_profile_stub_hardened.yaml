@@ -7,10 +7,10 @@ baseline:
   requires_gpu: false
   memory_backend: event_profile_stub
 data:
-  project_dir: examples/generated/release_packaging/gharchive_real_llm_paper_candidate_project_benchmark
-  submission_input_dir: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_submission_inputs_hardened
-  predictions_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_memory_profile_stub_hardened_predictions.jsonl
-  output_path: examples/generated/evaluation_harness/gharchive_real_llm_paper_candidate_memory_profile_stub_hardened_report.json
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/gharchive_formal_memory_profile_stub_hardened_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/gharchive_formal_memory_profile_stub_hardened_report.json
 evaluation:
   mode: memory_submission_prediction_generation
   adapter: event_profile_stub

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
+import time
+import urllib.error
+import urllib.request
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -90,6 +94,12 @@ def run_memory_submission_baseline(
     report_path: Path | None = None,
     allow_external: bool = False,
     system_name: str | None = None,
+    provider_config_path: Path | None = None,
+    model: str | None = None,
+    max_output_tokens: int = 512,
+    request_timeout: float = 60.0,
+    max_retries: int = 3,
+    retry_backoff_seconds: float = 2.0,
 ) -> dict[str, Any]:
     """Generate ProjectPrediction JSONL from no-gold submission inputs.
 
@@ -106,11 +116,27 @@ def run_memory_submission_baseline(
     system_name = system_name or adapter
 
     if adapter in EXTERNAL_MEMORY_SUBMISSION_ADAPTERS:
+        if allow_external:
+            report = _run_openai_compatible_memory_adapter(
+                input_dir,
+                predictions_path,
+                adapter=adapter,
+                top_k=top_k,
+                report_path=report_path,
+                system_name=system_name,
+                provider_config_path=provider_config_path,
+                model=model,
+                max_output_tokens=max_output_tokens,
+                request_timeout=request_timeout,
+                max_retries=max_retries,
+                retry_backoff_seconds=retry_backoff_seconds,
+            )
+            return report
         report = _external_adapter_report(
             input_dir,
             predictions_path,
             adapter=adapter,
-            allow_external=allow_external,
+            allow_external=False,
             system_name=system_name,
         )
         if report_path is not None:
@@ -333,15 +359,341 @@ def _runner_report(
     }
 
 
-def _runner_constraints(*, external_dependency_invoked: bool) -> dict[str, bool]:
+def _run_openai_compatible_memory_adapter(
+    input_dir: Path,
+    predictions_path: Path,
+    *,
+    adapter: str,
+    top_k: int,
+    report_path: Path | None,
+    system_name: str,
+    provider_config_path: Path | None,
+    model: str | None,
+    max_output_tokens: int,
+    request_timeout: float,
+    max_retries: int,
+    retry_backoff_seconds: float,
+) -> dict[str, Any]:
+    input_issues = _submission_input_issues(input_dir)
+    if input_issues:
+        report = _runner_report(
+            input_dir,
+            predictions_path,
+            adapter=adapter,
+            system_name=system_name,
+            status="invalid_input",
+            executed=False,
+            issues=input_issues,
+            projects=[],
+            probes=[],
+            events=[],
+            predictions=[],
+            top_k=top_k,
+        )
+        report["constraints"] = _runner_constraints(external_dependency_invoked=False)
+        if report_path is not None:
+            write_json(report_path, report)
+        return report
+
+    try:
+        provider = _load_openai_compatible_provider(provider_config_path, model=model)
+    except Exception as exc:
+        projects = read_jsonl(input_dir / "projects.jsonl")
+        probes = read_jsonl(input_dir / "probes.jsonl")
+        events = read_jsonl(input_dir / "events.jsonl")
+        report = _runner_report(
+            input_dir,
+            predictions_path,
+            adapter=adapter,
+            system_name=system_name,
+            status="blocked_missing_provider_config",
+            executed=False,
+            issues=[str(exc)],
+            projects=projects,
+            probes=probes,
+            events=events,
+            predictions=[],
+            top_k=top_k,
+        )
+        report["constraints"] = _runner_constraints(external_dependency_invoked=False)
+        report["external_adapter"] = _external_adapter_metadata(adapter)
+        if report_path is not None:
+            write_json(report_path, report)
+        return report
+
+    projects = read_jsonl(input_dir / "projects.jsonl")
+    events = read_jsonl(input_dir / "events.jsonl")
+    probes = read_jsonl(input_dir / "probes.jsonl")
+    events_by_project: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        events_by_project.setdefault(str(event.get("project_id")), []).append(event)
+    profiles = {
+        project_id: _build_event_profile(project_id, project_events)
+        for project_id, project_events in sorted(events_by_project.items())
+    }
+
+    prediction_rows, skipped_predictions, resume_warnings = _load_resume_predictions(predictions_path, probes)
+    loaded_existing_predictions = len(prediction_rows)
+    completed_keys = {(str(row.get("project_id")), str(row.get("probe_id"))) for row in prediction_rows}
+    issues: list[str] = []
+    warnings: list[str] = list(resume_warnings)
+    status = "completed"
+    for probe in probes:
+        project_id = str(probe.get("project_id"))
+        probe_id = str(probe.get("probe_id"))
+        if (project_id, probe_id) in completed_keys:
+            continue
+        project_events = events_by_project.get(project_id, [])
+        retrieved = _retrieve_events_for_probe(probe, project_events, top_k=top_k)
+        messages = _openai_compatible_memory_messages(adapter, probe, profiles.get(project_id, {}), retrieved)
+        try:
+            response_text = _openai_chat_completion_with_retry(
+                provider,
+                messages,
+                max_output_tokens=max_output_tokens,
+                request_timeout=request_timeout,
+                max_retries=max_retries,
+                retry_backoff_seconds=retry_backoff_seconds,
+            )
+        except Exception as exc:
+            status = "provider_api_failed"
+            issues.append(f"provider API call failed for {project_id}/{probe.get('probe_id')}: {exc}")
+            break
+        row = _external_llm_prediction_row(
+            probe,
+            retrieved,
+            prediction_text=response_text,
+            adapter=adapter,
+            system_name=system_name,
+            provider=provider,
+        )
+        model_validate(ProjectPrediction, row)
+        prediction_rows.append(row)
+        completed_keys.add((project_id, probe_id))
+        write_jsonl(predictions_path, prediction_rows)
+
+    report = _runner_report(
+        input_dir,
+        predictions_path,
+        adapter=adapter,
+        system_name=system_name,
+        status=status,
+        executed=True,
+        issues=issues,
+        projects=projects,
+        probes=probes,
+        events=events,
+        predictions=prediction_rows,
+        top_k=top_k,
+    )
+    report["warnings"] = warnings
+    report["summary"]["loaded_existing_predictions"] = loaded_existing_predictions
+    report["summary"]["new_predictions"] = max(0, len(prediction_rows) - loaded_existing_predictions)
+    report["summary"]["skipped_existing_predictions"] = skipped_predictions
+    report["summary"]["remaining_probes"] = max(0, len(probes) - len(completed_keys))
+    report["constraints"] = _runner_constraints(
+        external_dependency_invoked=True,
+        llm_generation_performed=True,
+    )
+    report["external_adapter"] = _external_adapter_metadata(adapter) | {
+        "execution_mode": "openai_compatible_prompt_adapter",
+        "provider_base_url": provider["base_url"],
+        "provider_model": provider["model"],
+        "provider_config_path": provider.get("config_path"),
+        "api_key_loaded": bool(provider.get("api_key")),
+        "method_package_imported": False,
+        "method_package_note": "This runner adapts the benchmark data to the method's memory style with an OpenAI-compatible model; it does not import the upstream method package.",
+        "max_retries": max_retries,
+        "retry_backoff_seconds": retry_backoff_seconds,
+    }
+    if report_path is not None:
+        write_json(report_path, report)
+    return report
+
+
+def _runner_constraints(*, external_dependency_invoked: bool, llm_generation_performed: bool = False) -> dict[str, bool]:
     return {
         "reads_submission_inputs_only": True,
         "uses_gold_memory_graph": False,
         "uses_probe_expected_behavior": False,
         "uses_gold_evidence_ids": False,
-        "llm_generation_performed": False,
+        "llm_generation_performed": llm_generation_performed,
         "external_dependency_invoked": external_dependency_invoked,
     }
+
+
+def _external_adapter_metadata(adapter: str) -> dict[str, Any]:
+    spec = EXTERNAL_ADAPTER_SPECS[adapter]
+    return {
+        "display_name": spec["display_name"],
+        "requires_gpu": spec["requires_gpu"],
+        "recommended_partition": spec["recommended_partition"],
+        "python_modules": spec["python_modules"],
+        "required_env": spec["required_env"],
+        "optional_env": spec["optional_env"],
+        "notes": spec["notes"],
+    }
+
+
+def _load_openai_compatible_provider(provider_config_path: Path | None, *, model: str | None) -> dict[str, Any]:
+    config_path = Path(
+        provider_config_path
+        or os.environ.get("ULB_OPENCODE_CONFIG")
+        or os.environ.get("OPENCODE_CONFIG")
+        or "opencode.json"
+    )
+    base_url = os.environ.get("ULB_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    api_key = os.environ.get("OPENAI_API_KEY")
+    model_name = model or os.environ.get("ULB_OPENAI_MODEL") or "gpt-5.4-mini"
+    config_loaded = False
+    if config_path.exists():
+        config_loaded = True
+        config = read_json(config_path)
+        openai = ((config.get("provider") or {}).get("openai") or {}) if isinstance(config, dict) else {}
+        options = openai.get("options") or {}
+        base_url = base_url or options.get("baseURL") or options.get("base_url")
+        api_key = api_key or options.get("apiKey") or options.get("api_key")
+        models = openai.get("models") or {}
+        if model is None and os.environ.get("ULB_OPENAI_MODEL") is None and model_name not in models and models:
+            model_name = sorted(models)[0]
+    if not base_url:
+        raise ValueError(f"missing OpenAI-compatible base URL; set ULB_OPENAI_BASE_URL/OPENAI_BASE_URL or provide {config_path}")
+    if not api_key:
+        raise ValueError(f"missing OpenAI-compatible API key; set OPENAI_API_KEY or provide {config_path}")
+    return {
+        "base_url": str(base_url).rstrip("/"),
+        "api_key": str(api_key),
+        "model": str(model_name),
+        "config_path": str(config_path) if config_loaded else None,
+    }
+
+
+def _load_resume_predictions(predictions_path: Path, probes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, list[str]]:
+    if not predictions_path.exists():
+        return [], 0, []
+    expected_keys = {(str(probe.get("project_id")), str(probe.get("probe_id"))) for probe in probes}
+    rows = read_jsonl(predictions_path)
+    kept: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    skipped = 0
+    warnings: list[str] = []
+    for row in rows:
+        key = (str(row.get("project_id")), str(row.get("probe_id")))
+        try:
+            model_validate(ProjectPrediction, row)
+        except Exception:
+            skipped += 1
+            continue
+        if key not in expected_keys or key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
+        kept.append(row)
+    if skipped:
+        warnings.append(f"ignored {skipped} invalid, duplicate, or out-of-release existing prediction rows while resuming")
+    if kept:
+        write_jsonl(predictions_path, kept)
+    return kept, skipped, warnings
+
+
+def _openai_chat_completion_with_retry(
+    provider: dict[str, Any],
+    messages: list[dict[str, str]],
+    *,
+    max_output_tokens: int,
+    request_timeout: float,
+    max_retries: int,
+    retry_backoff_seconds: float,
+) -> str:
+    attempts = max(1, int(max_retries) + 1)
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return _openai_chat_completion(
+                provider,
+                messages,
+                max_output_tokens=max_output_tokens,
+                request_timeout=request_timeout,
+            )
+        except Exception as exc:
+            last_error = exc
+            if attempt >= attempts - 1 or not _is_retryable_provider_error(exc):
+                break
+            time.sleep(max(0.0, retry_backoff_seconds) * (2**attempt))
+    assert last_error is not None
+    raise last_error
+
+
+def _openai_chat_completion(
+    provider: dict[str, Any],
+    messages: list[dict[str, str]],
+    *,
+    max_output_tokens: int,
+    request_timeout: float,
+) -> str:
+    endpoint = f"{provider['base_url']}/chat/completions"
+    payload = {
+        "model": provider["model"],
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": max_output_tokens,
+        "store": False,
+    }
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {provider['api_key']}",
+            "Content-Type": "application/json",
+            "User-Agent": "OpenAI/Python 1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=request_timeout) as response:
+            body = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code}: {_safe_provider_error(body)}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(str(exc.reason)) from exc
+    payload = json.loads(body)
+    choices = payload.get("choices") or []
+    if not choices:
+        raise RuntimeError("provider response has no choices")
+    message = choices[0].get("message") or {}
+    content = message.get("content", "")
+    if isinstance(content, list):
+        content = "\n".join(str(item.get("text", item)) if isinstance(item, dict) else str(item) for item in content)
+    text = str(content).strip()
+    if not text:
+        raise RuntimeError("provider response content is empty")
+    return text
+
+
+def _is_retryable_provider_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    retry_markers = [
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "timed out",
+        "timeout",
+        "unexpected_eof",
+        "eof occurred",
+        "connection reset",
+        "remote end closed",
+        "temporarily unavailable",
+        "ssl",
+    ]
+    return any(marker in text for marker in retry_markers)
+
+
+def _safe_provider_error(body: str) -> str:
+    text = re.sub(r"sk-[A-Za-z0-9_\-]+", "sk-<redacted>", body)
+    return text[:1000]
 
 
 def _build_event_profile(project_id: str, events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -451,6 +803,102 @@ def _event_profile_prediction_row(
         },
     }
     return row
+
+
+def _openai_compatible_memory_messages(
+    adapter: str,
+    probe: dict[str, Any],
+    profile: dict[str, Any],
+    retrieved: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    style = _adapter_prompt_style(adapter)
+    event_lines = []
+    for event in retrieved:
+        event_lines.append(
+            "\n".join(
+                [
+                    f"event_id: {event.get('event_id')}",
+                    f"timestamp: {event.get('timestamp')}",
+                    f"type: {event.get('event_type')}",
+                    f"actor: {event.get('actor')}",
+                    f"content: {event.get('content')}",
+                ]
+            )
+        )
+    profile_text = json.dumps(profile, ensure_ascii=True, sort_keys=True)
+    user = f"""Future task:
+{probe.get('query')}
+
+Public probe metadata:
+- project_id: {probe.get('project_id')}
+- probe_id: {probe.get('probe_id')}
+- task_type: {probe.get('task_type')}
+- capabilities: {', '.join(str(item) for item in probe.get('capabilities', []))}
+
+No-gold induced event profile:
+{profile_text}
+
+Retrieved no-gold workflow events:
+{chr(10).join(event_lines) if event_lines else '(none)'}
+
+Write the prediction text only. Include the policy you infer, the action you would take or avoid, and cite relevant event_id values when useful. Do not claim access to hidden gold memories or expected answers."""
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are evaluating an agent-memory method on LongUserPolicyBench. "
+                "Use only the supplied no-gold submission inputs. Do not assume hidden expected behavior. "
+                f"Emulate this memory style: {style}"
+            ),
+        },
+        {"role": "user", "content": user},
+    ]
+
+
+def _adapter_prompt_style(adapter: str) -> str:
+    if adapter == "a_mem":
+        return (
+            "A-MEM-style agentic memory: convert observations into compact evolving notes, connect related policy cues, "
+            "separate durable workflow policy from one-off negative examples, and apply the linked memory to future tool-action boundaries."
+        )
+    if adapter == "mem0":
+        return (
+            "Mem0-style long-term memory: extract durable user/workflow facts, consolidate repeated evidence, retrieve the most relevant memories, "
+            "and answer with a conservative policy/action decision."
+        )
+    if adapter == "graphiti":
+        return (
+            "Graphiti/Zep-style temporal knowledge graph memory: track actors, repos, labels, actions, and temporal policy changes as relations, "
+            "then reason over the current graph state and action boundaries."
+        )
+    return "generic no-gold memory-system baseline"
+
+
+def _external_llm_prediction_row(
+    probe: dict[str, Any],
+    retrieved: list[dict[str, Any]],
+    *,
+    prediction_text: str,
+    adapter: str,
+    system_name: str,
+    provider: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "prediction_id": f"pred_{probe['project_id']}_{probe['probe_id']}",
+        "project_id": probe["project_id"],
+        "probe_id": probe["probe_id"],
+        "prediction": prediction_text,
+        "retrieved_memory_ids": [],
+        "retrieved_event_ids": _unique([str(event.get("event_id")) for event in retrieved if event.get("event_id")]),
+        "retrieved_artifact_ids": _unique([str(artifact_id) for event in retrieved for artifact_id in event.get("artifacts", [])]),
+        "metadata": {
+            "baseline": system_name,
+            "adapter": adapter,
+            "split": probe.get("split"),
+            "no_gold_submission_input": True,
+            "openai_compatible_model": provider["model"],
+        },
+    }
 
 
 def _policy_lines_from_query(query: str, profile: dict[str, Any]) -> list[str]:

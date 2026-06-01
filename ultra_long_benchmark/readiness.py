@@ -3,16 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ultra_long_benchmark.audit import audit_generated
+from ultra_long_benchmark.artifact_bundle import verify_artifact_bundle_manifest
+from ultra_long_benchmark.claim_lint import verify_paper_claim_lint_report
 from ultra_long_benchmark.data_discovery import discover_public_data_sources
+from ultra_long_benchmark.data_discovery import verify_public_data_discovery_report
 from ultra_long_benchmark.paper_scale import assess_release_scale
-from ultra_long_benchmark.pipelines.verifier import run_project_verifier
+from ultra_long_benchmark.pipelines.baseline_configs import verify_baseline_batch_report
 from ultra_long_benchmark.probe_audit import audit_project_release_probe_leakage
 from ultra_long_benchmark.project_release import verify_project_benchmark_release
 from ultra_long_benchmark.project_release import verify_project_submission_inputs
 from ultra_long_benchmark.release_integrity import verify_annotation_release_integrity
 from ultra_long_benchmark.shared.io import read_json, write_json
 from ultra_long_benchmark.source_audit import audit_workflow_data_sources
+from ultra_long_benchmark.source_audit import verify_workflow_data_source_audit
+from ultra_long_benchmark.taxonomy_coverage import audit_project_release_taxonomy_coverage
+from ultra_long_benchmark.taxonomy_coverage import verify_project_release_taxonomy_coverage_audit
 
 
 def build_readiness_report(
@@ -22,7 +27,6 @@ def build_readiness_report(
     annotation_release_dir: Path | None = None,
     prompt_export_dir: Path | None = None,
     rewrite_job_dir: Path | None = None,
-    rewrite_project_dir: Path | None = None,
     staged_slice_manifest: Path | None = None,
     gharchive_stage_plan_path: Path | None = None,
     scale_summary_path: Path | None = None,
@@ -38,36 +42,41 @@ def build_readiness_report(
     paper_table_dir: Path | None = None,
     rewrite_human_audit_path: Path | None = None,
     probe_leakage_audit_path: Path | None = None,
+    taxonomy_coverage_audit_path: Path | None = None,
+    claim_boundary_audit_path: Path | None = None,
+    claim_lint_path: Path | None = None,
+    artifact_bundle_manifest_path: Path | None = None,
     paper_scale_profile: str = "paper",
     require_paper_scale: bool = False,
 ) -> dict[str, Any]:
     """Aggregate release-readiness evidence without rerunning expensive stages."""
 
     generated_dir = Path(generated_dir)
-    baseline_batch_dir = baseline_batch_dir or generated_dir / "evaluation_harness" / "baseline_batch"
-    annotation_release_dir = annotation_release_dir or generated_dir / "release_packaging" / "gharchive_annotation_pack"
-    prompt_export_dir = prompt_export_dir or generated_dir / "annotation_packs" / "gharchive_prompt_exports"
-    rewrite_job_dir = rewrite_job_dir or generated_dir / "annotation_packs" / "rewrite_jobs"
-    rewrite_project_dir = rewrite_project_dir or generated_dir / "projects" / "project_gharchive_rewrite_001"
-    staged_slice_manifest = staged_slice_manifest or generated_dir / "gharchive_staged_slice_manifest.json"
+    baseline_batch_dir = baseline_batch_dir or generated_dir / "evaluation_harness" / "baseline_batch_after_claim_boundary"
+    annotation_release_dir = annotation_release_dir or generated_dir / "release_packaging" / "gharchive_formal_annotation_pack"
+    prompt_export_dir = prompt_export_dir or generated_dir / "annotation_packs" / "gharchive_formal_prompt_exports"
+    rewrite_job_dir = rewrite_job_dir or generated_dir / "annotation_packs" / "gharchive_formal_rewrite_jobs"
+    staged_slice_manifest = staged_slice_manifest or Path("/home/jmzhang/Workspace/data/gharchive/longuserpolicy_2024_01_release_slice_manifest.json")
     gharchive_stage_plan_path = gharchive_stage_plan_path or generated_dir / "gharchive_stage_plan.json"
-    scale_summary_path = scale_summary_path or generated_dir / "gharchive_scale_summary.json"
+    scale_summary_path = scale_summary_path or generated_dir / "gharchive_formal_scale_summary.json"
     window_report_path = window_report_path or generated_dir / "gharchive_window_report.json"
     public_data_discovery_path = public_data_discovery_path or generated_dir / "public_data_discovery_report.json"
     workflow_source_audit_path = workflow_source_audit_path or generated_dir / "workflow_data_source_audit.json"
-    batch_rewrite_validation_path = batch_rewrite_validation_path or generated_dir / "annotation_packs" / "gharchive_rewrite_validation_batch" / "batch_rewrite_validation_report.json"
-    batch_rewrite_projects_path = batch_rewrite_projects_path or generated_dir / "projects" / "batch_rewrite_project_report.json"
-    project_release_dir = project_release_dir or generated_dir / "release_packaging" / "project_benchmark"
-    project_submission_input_dir = project_submission_input_dir or generated_dir / "evaluation_harness" / "project_submission_inputs"
-    project_release_baseline_path = project_release_baseline_path or generated_dir / "evaluation_harness" / "project_release_baselines.json"
-    project_release_prediction_path = project_release_prediction_path or generated_dir / "evaluation_harness" / "project_release_prediction_report.json"
-    paper_table_dir = paper_table_dir or generated_dir / "evaluation_harness" / "paper_tables"
-    rewrite_human_audit_path = rewrite_human_audit_path or generated_dir / "annotation_packs" / "rewrite_human_audit" / "audit_validation_report.json"
-    probe_leakage_audit_path = probe_leakage_audit_path or generated_dir / "evaluation_harness" / "project_release_probe_leakage_audit.json"
+    batch_rewrite_validation_path = batch_rewrite_validation_path or generated_dir / "annotation_packs" / "gharchive_formal_validation" / "batch_rewrite_validation_report.json"
+    batch_rewrite_projects_path = batch_rewrite_projects_path or generated_dir / "projects" / "gharchive_formal_batch" / "batch_rewrite_project_report.json"
+    project_release_dir = project_release_dir or generated_dir / "release_packaging" / "gharchive_formal_project_benchmark"
+    project_submission_input_dir = project_submission_input_dir or generated_dir / "evaluation_harness" / "gharchive_formal_submission_inputs_hardened"
+    project_release_baseline_path = project_release_baseline_path or generated_dir / "evaluation_harness" / "gharchive_formal_project_release_baselines.json"
+    project_release_prediction_path = project_release_prediction_path or generated_dir / "evaluation_harness" / "gharchive_formal_memory_profile_stub_hardened_score.json"
+    paper_table_dir = paper_table_dir or generated_dir / "evaluation_harness" / "gharchive_formal_paper_tables"
+    rewrite_human_audit_path = rewrite_human_audit_path or generated_dir / "annotation_packs" / "gharchive_formal_human_audit" / "audit_validation_report.json"
+    probe_leakage_audit_path = probe_leakage_audit_path or generated_dir / "evaluation_harness" / "gharchive_formal_submission_inputs_hardened_probe_leakage_audit.json"
+    taxonomy_coverage_audit_path = taxonomy_coverage_audit_path or generated_dir / "evaluation_harness" / "gharchive_formal_taxonomy_coverage_audit.json"
+    claim_boundary_audit_path = claim_boundary_audit_path or generated_dir / "evaluation_harness" / "gharchive_formal_claim_boundary_audit.json"
+    claim_lint_path = claim_lint_path or generated_dir / "evaluation_harness" / "gharchive_formal_claim_lint.json"
+    artifact_bundle_manifest_path = artifact_bundle_manifest_path or generated_dir / "evaluation_harness" / "gharchive_formal_artifact_bundle_manifest.json"
 
-    audit = audit_generated(generated_dir)
     checks = {
-        "offline_smoke_audit": _audit_check(audit),
         "baseline_batch": _baseline_batch_check(baseline_batch_dir),
         "annotation_release": _annotation_release_check(annotation_release_dir),
         "prompt_exports": _prompt_exports_check(prompt_export_dir),
@@ -101,7 +110,14 @@ def build_readiness_report(
             project_release_dir,
             required=require_paper_scale,
         ),
-        "rewrite_project_verifier": _rewrite_project_check(rewrite_project_dir),
+        "taxonomy_coverage_audit": _taxonomy_coverage_audit_check(
+            taxonomy_coverage_audit_path,
+            project_release_dir,
+            require_multi_domain=False,
+        ),
+        "claim_boundary_audit": _claim_boundary_audit_check(claim_boundary_audit_path),
+        "claim_lint": _claim_lint_check(claim_lint_path),
+        "artifact_bundle_manifest": _artifact_bundle_manifest_check(artifact_bundle_manifest_path),
         "gharchive_stage_plan": _gharchive_stage_plan_check(gharchive_stage_plan_path, required=require_paper_scale),
         "staged_slice_manifest": _staged_slice_manifest_check(staged_slice_manifest),
     }
@@ -125,30 +141,13 @@ def build_readiness_report(
     return report
 
 
-def _audit_check(audit: dict[str, Any]) -> dict[str, Any]:
-    issues = []
-    counts = audit.get("counts", {})
-    if audit.get("passed") is not True:
-        issues.append("audit_generated did not pass")
-    for key in ("source_documents", "personas", "trajectories", "queries"):
-        if int(counts.get(key, 0)) <= 0:
-            issues.append(f"missing generated {key}")
-    return {
-        "status": "pass" if not issues else "fail",
-        "issues": issues,
-        "evidence": {
-            "passed": audit.get("passed"),
-            "counts": {key: counts.get(key) for key in ("source_documents", "personas", "trajectories", "sessions", "queries")},
-        },
-    }
-
-
 def _baseline_batch_check(baseline_batch_dir: Path) -> dict[str, Any]:
     report_path = Path(baseline_batch_dir) / "baseline_batch_report.json"
     if not report_path.exists():
         return _missing("baseline batch report missing", report_path)
     report = read_json(report_path)
     summary = report.get("summary", {})
+    verification = verify_baseline_batch_report(report_path)
     issues = []
     if report.get("passed") is not True:
         issues.append("baseline batch report did not pass")
@@ -156,12 +155,15 @@ def _baseline_batch_check(baseline_batch_dir: Path) -> dict[str, Any]:
         issues.append("no deterministic baselines completed")
     if int(summary.get("failed", 0)) > 0:
         issues.append("baseline batch has failed configs")
+    if verification.get("passed") is not True:
+        issues.append("baseline batch runner reports or outputs changed or lack digests")
     return {
         "status": "pass" if not issues else "fail",
         "issues": issues,
         "evidence": {
             "path": str(report_path),
             "summary": summary,
+            "verification_summary": verification.get("summary", {}),
             "dry_run_external": report.get("dry_run_external"),
             "allow_llm_api": report.get("allow_llm_api"),
         },
@@ -332,12 +334,16 @@ def _public_data_discovery_check(discovery_path: Path) -> dict[str, Any]:
         warnings.append("no locally discovered public workflow source is directly usable for paper-scale construction")
     if int(summary.get("github_code_only_sources", 0)) > 0:
         warnings.append("local GitHub code-text corpora were found but are not workflow event timelines")
+    verification = verify_public_data_discovery_report(discovery_path)
+    if verification.get("passed") is not True:
+        issues.append("public data discovery candidate files changed or lack digests")
     return {
-        "status": "warn" if warnings else "pass",
+        "status": "fail" if issues else ("warn" if warnings else "pass"),
         "issues": issues + warnings,
         "evidence": {
             "path": str(discovery_path),
             "summary": summary,
+            "verification_summary": verification.get("summary", {}),
             "recommended_next_actions": report.get("recommended_next_actions", []),
         },
     }
@@ -372,9 +378,12 @@ def _workflow_source_audit_check(
 
     issues = [issue["message"] for issue in report.get("issues", [])]
     warnings = [warning["message"] for warning in report.get("warnings", [])]
+    verification = verify_workflow_data_source_audit(audit_path)
+    if verification.get("passed") is not True:
+        issues.append("workflow source audit inputs changed or lack digests")
     if required and report.get("paper_ready") is not True:
         status = "fail"
-    elif report.get("passed") is not True or report.get("annotation_budget_ready") is not True or warnings:
+    elif report.get("passed") is not True or report.get("annotation_budget_ready") is not True or warnings or verification.get("passed") is not True:
         status = "warn"
     else:
         status = "pass"
@@ -388,6 +397,7 @@ def _workflow_source_audit_check(
             "summary": report.get("summary", {}),
             "annotation_budget_ready": report.get("annotation_budget_ready"),
             "paper_ready": report.get("paper_ready"),
+            "verification_summary": verification.get("summary", {}),
             "stage_plan_decision": report.get("stage_plan_decision"),
             "recommended_next_actions": report.get("recommended_next_actions", []),
         },
@@ -690,20 +700,134 @@ def _probe_leakage_audit_check(report_path: Path, release_dir: Path, *, required
     }
 
 
-def _rewrite_project_check(rewrite_project_dir: Path) -> dict[str, Any]:
-    project_dir = Path(rewrite_project_dir)
-    if not project_dir.exists():
-        return _missing("rewrite-derived project missing", project_dir)
-    report = run_project_verifier(project_dir)
-    issues = list(report.issues)
+def _taxonomy_coverage_audit_check(report_path: Path, release_dir: Path, *, require_multi_domain: bool) -> dict[str, Any]:
+    report_path = Path(report_path)
+    release_dir = Path(release_dir)
+    if report_path.exists():
+        report = read_json(report_path)
+    elif (release_dir / "project_release_manifest.json").exists():
+        report = audit_project_release_taxonomy_coverage(
+            release_dir,
+            output_path=report_path,
+            require_multi_domain=require_multi_domain,
+        )
+    else:
+        return {
+            "status": "warn",
+            "issues": ["taxonomy coverage audit missing and project release is unavailable"],
+            "evidence": {"path": str(report_path), "release_dir": str(release_dir), "require_multi_domain": require_multi_domain},
+        }
+
+    summary = report.get("summary", {})
+    issues = [issue["message"] for issue in report.get("issues", [])]
+    warnings = [warning["message"] for warning in report.get("warnings", [])]
+    verification = verify_project_release_taxonomy_coverage_audit(report_path)
+    if verification.get("passed") is not True:
+        issues.append("taxonomy coverage audit release artifacts changed or lack digests")
+    if report.get("passed") is not True:
+        status = "fail"
+    elif warnings or verification.get("passed") is not True:
+        status = "warn"
+    else:
+        status = "pass"
     return {
-        "status": "pass" if report.passed else "fail",
+        "status": status,
+        "issues": issues + warnings,
+        "evidence": {
+            "path": str(report_path),
+            "release_dir": report.get("release_dir"),
+            "summary": summary,
+            "verification_summary": verification.get("summary", {}),
+            "claim_boundary": report.get("checks", {}).get("claim_boundary", {}),
+            "workflow_domain_coverage": report.get("checks", {}).get("workflow_domain_coverage", {}),
+            "task_taxonomy_coverage": report.get("checks", {}).get("task_taxonomy_coverage", {}),
+        },
+    }
+
+
+def _claim_boundary_audit_check(report_path: Path) -> dict[str, Any]:
+    report_path = Path(report_path)
+    if not report_path.exists():
+        return {
+            "status": "warn",
+            "issues": ["paper claim-boundary audit missing"],
+            "evidence": {"path": str(report_path)},
+        }
+    report = read_json(report_path)
+    summary = report.get("summary", {})
+    issues = []
+    if report.get("passed") is not True:
+        issues.append("paper claim-boundary audit did not pass")
+    blocked = int(summary.get("blocked", 0))
+    qualified = int(summary.get("qualified", 0))
+    if blocked:
+        issues.append(f"{blocked} paper-facing claims are blocked")
+    if qualified:
+        issues.append(f"{qualified} paper-facing claims require qualification")
+    status = "fail" if report.get("passed") is not True else ("warn" if issues else "pass")
+    return {
+        "status": status,
         "issues": issues,
         "evidence": {
-            "project_dir": str(project_dir),
-            "project_id": report.project_id,
-            "verifier_passed": report.passed,
-            "counts": report.counts,
+            "path": str(report_path),
+            "summary": summary,
+            "recommended_language": report.get("recommended_language", {}),
+        },
+    }
+
+
+def _claim_lint_check(report_path: Path) -> dict[str, Any]:
+    report_path = Path(report_path)
+    if not report_path.exists():
+        return {
+            "status": "warn",
+            "issues": ["paper claim lint report missing"],
+            "evidence": {"path": str(report_path)},
+        }
+    verification = verify_paper_claim_lint_report(report_path)
+    summary = verification.get("source_summary", {})
+    issues = [issue["message"] for issue in verification.get("issues", [])]
+    issue_count = int(summary.get("issues", 0))
+    if issue_count > 0:
+        issues.append(f"{issue_count} affirmative blocked-claim mentions were found")
+    return {
+        "status": "fail" if issues else "pass",
+        "issues": issues,
+        "evidence": {
+            "path": str(report_path),
+            "summary": summary,
+            "verification_summary": verification.get("summary", {}),
+            "allowed_blocked_claim_mentions": summary.get("allowed_blocked_claim_mentions"),
+        },
+    }
+
+
+def _artifact_bundle_manifest_check(report_path: Path) -> dict[str, Any]:
+    report_path = Path(report_path)
+    if not report_path.exists():
+        return {
+            "status": "warn",
+            "issues": ["artifact bundle manifest missing; reproducibility bundle has not been audited"],
+            "evidence": {"path": str(report_path)},
+        }
+    report = verify_artifact_bundle_manifest(report_path)
+    summary = report.get("summary", {})
+    issues = [issue["message"] for issue in report.get("issues", [])]
+    warnings = [warning["message"] for warning in report.get("warnings", [])]
+    if report.get("passed") is not True:
+        status = "fail"
+    elif warnings:
+        status = "warn"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "issues": issues + warnings,
+        "evidence": {
+            "path": str(report_path),
+            "summary": summary,
+            "artifact_names": sorted(report.get("artifacts", {})),
+            "verification_report": True,
         },
     }
 

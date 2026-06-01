@@ -4,6 +4,7 @@ from ultra_long_benchmark.pipelines.annotation_pack import build_gharchive_annot
 from ultra_long_benchmark.pipelines.annotation_pack import build_projects_from_policy_rewrite_batch
 from ultra_long_benchmark.pipelines.annotation_pack import validate_policy_rewrite_proposals_batch
 from ultra_long_benchmark.pipelines.evaluation import run_project_release_baseline_evaluation
+from ultra_long_benchmark.pipelines.evaluation import score_project_release_action_traces
 from ultra_long_benchmark.pipelines.evaluation import score_project_release_prediction_dir
 from ultra_long_benchmark.pipelines.evaluation import score_project_release_predictions
 from ultra_long_benchmark.project_release import export_project_benchmark_release
@@ -188,6 +189,66 @@ def test_score_project_release_predictions_aggregates_cross_project_submission(t
     assert "workflow_boundary_respect" in report["summary"]["by_capability"]
     assert all(not prediction["diagnostics"]["labels"] for project in report["projects"] for prediction in project["predictions"])
     assert read_json(tmp_path / "release_prediction_report.json")["summary"]["projects"] == 2
+
+
+def test_score_project_release_action_traces_aggregates_cross_project_traces(tmp_path: Path):
+    project_dirs = _build_rewrite_projects(tmp_path)
+    release_dir = tmp_path / "project_release"
+    export_project_benchmark_release(project_dirs, release_dir, version="test")
+    traces_path = tmp_path / "release_action_traces.jsonl"
+    first_project_id = read_json(project_dirs[0] / "project_profile.json")["project_id"]
+    second_project_id = read_json(project_dirs[1] / "project_profile.json")["project_id"]
+    first_probe = read_jsonl(project_dirs[0] / "probes.jsonl")[0]
+    second_probe = read_jsonl(project_dirs[1] / "probes.jsonl")[0]
+    write_jsonl(
+        traces_path,
+        [
+            {
+                "trace_id": "trace_first_project_pass",
+                "project_id": first_project_id,
+                "probe_id": first_probe["probe_id"],
+                "actions": [
+                    {"action_id": "action_001", "tool": "github", "action": "add_summary_comment"},
+                    {"action_id": "action_002", "tool": "github", "action": "request_nina_review"},
+                ],
+            },
+            {
+                "trace_id": "trace_second_project_fail",
+                "project_id": second_project_id,
+                "probe_id": second_probe["probe_id"],
+                "actions": [{"action_id": "action_003", "tool": "github", "action": "merge_before_review"}],
+            },
+            {
+                "trace_id": "trace_absent_project",
+                "project_id": "project_absent_from_release",
+                "probe_id": "probe_absent",
+                "actions": [{"action_id": "action_004", "tool": "github", "action": "noop"}],
+            },
+        ],
+    )
+
+    report = score_project_release_action_traces(release_dir, traces_path, tmp_path / "release_action_trace_report.json", system_name="trace_system")
+
+    assert report["system_name"] == "trace_system"
+    assert report["summary"]["projects"] == 2
+    assert report["summary"]["release_probes"] == 8
+    assert report["summary"]["traces"] == 3
+    assert report["summary"]["scored_traces"] == 2
+    assert report["summary"]["extra_traces"] == 1
+    assert report["summary"]["passed"] == 1
+    assert report["summary"]["project_coverage"] == 1.0
+    assert report["summary"]["probe_coverage"] == 0.25
+    assert report["summary"]["boundary_violation_rate"] == 0.6667
+    assert report["extra_project_ids"] == ["project_absent_from_release"]
+    by_project = {project["project_id"]: project for project in report["projects"]}
+    assert by_project[first_project_id]["summary"]["passed"] == 1
+    assert by_project[second_project_id]["summary"]["passed"] == 0
+    assert any(
+        violation["type"] == "forbidden_action"
+        for trace in by_project[second_project_id]["traces"]
+        for violation in trace["violations"]
+    )
+    assert read_json(tmp_path / "release_action_trace_report.json")["summary"]["projects"] == 2
 
 
 def test_validate_project_prediction_submission_checks_coverage_before_scoring(tmp_path: Path):

@@ -528,7 +528,7 @@ def _harden_probe_query(project_id: str, probe: dict[str, Any]) -> str:
 
 
 def _repo_from_project_id(project_id: str) -> str:
-    prefix = "project_gharchive_real_llm_paper_"
+    prefix = "project_gharchive_formal_"
     if project_id.startswith(prefix):
         return project_id.removeprefix(prefix).replace("_", "/")
     generic_prefix = "project_gharchive_"

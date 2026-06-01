@@ -2,41 +2,103 @@ from pathlib import Path
 
 import yaml
 
-from ultra_long_benchmark.pipelines.baseline_configs import run_baseline_config, run_baseline_config_dir, validate_baseline_config, validate_baseline_config_dir
-from ultra_long_benchmark.pipelines.gharchive_pilot import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
-from ultra_long_benchmark.pipelines.gharchive_pilot import run_gharchive_pilot
+from ultra_long_benchmark.pipelines.baseline_configs import run_baseline_config
+from ultra_long_benchmark.pipelines.baseline_configs import run_baseline_config_dir
+from ultra_long_benchmark.pipelines.baseline_configs import validate_baseline_config
+from ultra_long_benchmark.pipelines.baseline_configs import validate_baseline_config_dir
+from ultra_long_benchmark.pipelines.baseline_configs import verify_baseline_batch_report
+from ultra_long_benchmark.pipelines.baseline_configs import verify_baseline_config_validation_report
+from ultra_long_benchmark.pipelines.gharchive import DEFAULT_FIXTURE_PATH as DEFAULT_GHARCHIVE_FIXTURE_PATH
+from ultra_long_benchmark.pipelines.gharchive import build_gharchive_project_fixture
 from ultra_long_benchmark.project_release import export_project_benchmark_release
 from ultra_long_benchmark.project_release import export_project_submission_inputs
-from ultra_long_benchmark.shared.io import load_yaml, read_json, read_jsonl, write_jsonl
+from ultra_long_benchmark.shared.io import load_yaml
+from ultra_long_benchmark.shared.io import read_json
+from ultra_long_benchmark.shared.io import read_jsonl
+from ultra_long_benchmark.shared.io import write_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_BASELINE_CONFIGS = {
+    "a_mem_submission_placeholder",
+    "external_memory_runner_echo_contract",
+    "graphiti_submission_placeholder",
+    "mem0_submission_placeholder",
+    "memory_submission_event_profile_stub",
+    "memory_submission_event_profile_stub_hardened",
+}
 
 
 def test_baseline_config_directory_validates_checked_in_configs():
     report = validate_baseline_config_dir(ROOT / "configs" / "baselines")
 
     assert report["passed"] is True
-    assert report["summary"]["configs_total"] >= 4
-    names = {item["baseline_name"] for item in report["configs"]}
-    assert {
-        "oracle_policy_graph",
-        "raw_rag_project",
-        "temporal_raw_rag_project",
-        "gharchive_prediction_submission_example",
-        "project_release_prediction_dir",
-        "full_event_log_project",
-        "no_memory_project",
-        "gharchive_action_trace_scoring",
-        "submission_input_raw_event_rag",
-        "memory_submission_event_profile_stub",
-        "memory_submission_event_profile_stub_hardened",
-        "mem0_project",
-        "a_mem_project",
-        "mem0_submission_placeholder",
-        "a_mem_submission_placeholder",
-        "graphiti_submission_placeholder",
-    } <= names
+    assert report["summary"]["configs_total"] == len(EXPECTED_BASELINE_CONFIGS)
+    assert report["summary"]["configs_hashed"] == report["summary"]["configs_total"]
+    assert all(item.get("sha256") and item.get("bytes") for item in report["configs"])
+    assert {item["baseline_name"] for item in report["configs"]} == EXPECTED_BASELINE_CONFIGS
+
+
+def test_baseline_config_validation_report_verifies_config_hashes(tmp_path: Path):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    _write_minimal_baseline_config(config_dir / "baseline_a.yaml", "baseline_a")
+    _write_minimal_baseline_config(config_dir / "baseline_b.yaml", "baseline_b")
+    report_path = tmp_path / "baseline_validation.json"
+    validate_baseline_config_dir(config_dir, output_path=report_path)
+
+    verification = verify_baseline_config_validation_report(report_path)
+
+    assert verification["passed"] is True
+    assert verification["summary"]["configs_total"] == 2
+    assert verification["summary"]["configs_verified"] == 2
+
+
+def test_baseline_config_validation_report_fails_when_config_changes(tmp_path: Path):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    config_path = config_dir / "baseline_a.yaml"
+    _write_minimal_baseline_config(config_path, "baseline_a")
+    report_path = tmp_path / "baseline_validation.json"
+    validate_baseline_config_dir(config_dir, output_path=report_path)
+    config_path.write_text(config_path.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+
+    verification = verify_baseline_config_validation_report(report_path)
+
+    assert verification["passed"] is False
+    assert "baseline_config_sha256_mismatch" in verification["summary"]["issue_codes"]
+
+
+def test_baseline_config_validation_report_fails_when_summary_counts_drift(tmp_path: Path):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    _write_minimal_baseline_config(config_dir / "baseline_a.yaml", "baseline_a")
+    report_path = tmp_path / "baseline_validation.json"
+    validate_baseline_config_dir(config_dir, output_path=report_path)
+    report = read_json(report_path)
+    report["summary"]["configs_total"] = 2
+    write_json(report_path, report)
+
+    verification = verify_baseline_config_validation_report(report_path)
+
+    assert verification["passed"] is False
+    assert "baseline_config_summary_configs_total_mismatch" in verification["summary"]["issue_codes"]
+
+
+def test_baseline_config_validation_report_fails_without_config_dir(tmp_path: Path):
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    _write_minimal_baseline_config(config_dir / "baseline_a.yaml", "baseline_a")
+    report_path = tmp_path / "baseline_validation.json"
+    validate_baseline_config_dir(config_dir, output_path=report_path)
+    report = read_json(report_path)
+    report.pop("config_dir")
+    write_json(report_path, report)
+
+    verification = verify_baseline_config_validation_report(report_path)
+
+    assert verification["passed"] is False
+    assert "baseline_config_dir_missing" in verification["summary"]["issue_codes"]
 
 
 def test_baseline_config_validator_rejects_gpu_config_without_gpu_request(tmp_path: Path):
@@ -46,16 +108,19 @@ def test_baseline_config_validator_rejects_gpu_config_without_gpu_request(tmp_pa
 baseline:
   name: bad_gpu
   family: memory_system
-  entrypoint: runner:main
+  entrypoint: ultra_long_benchmark.cli:run-memory-submission-baseline
   requires_llm_api: true
   requires_gpu: true
   memory_backend: mem0
 data:
-  project_dir: examples/generated/projects/project_gharchive_001
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/bad_predictions.jsonl
   output_path: examples/generated/evaluation_harness/bad.json
 evaluation:
-  mode: project_probe_action_trace
-  metrics: [boundary_violation_rate]
+  mode: memory_submission_prediction_generation
+  adapter: mem0
+  metrics: [prediction_coverage]
 resources:
   partition: RTX4090
   gpus: 0
@@ -83,16 +148,19 @@ def test_baseline_config_validator_rejects_llm_config_without_required_env(tmp_p
 baseline:
   name: bad_env
   family: memory_system
-  entrypoint: runner:main
+  entrypoint: ultra_long_benchmark.cli:run-memory-submission-baseline
   requires_llm_api: true
   requires_gpu: false
-  memory_backend: external
+  memory_backend: graphiti
 data:
-  project_dir: examples/generated/projects/project_gharchive_001
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/bad_predictions.jsonl
   output_path: examples/generated/evaluation_harness/bad.json
 evaluation:
-  mode: project_probe_text
-  metrics: [evidence_recall]
+  mode: memory_submission_prediction_generation
+  adapter: graphiti
+  metrics: [prediction_coverage]
 resources:
   partition: cpu
   gpus: 0
@@ -111,158 +179,8 @@ reproducibility:
     assert any("environment.required" in issue for issue in report["issues"])
 
 
-def test_baseline_config_validator_rejects_unknown_project_baseline(tmp_path: Path):
-    bad_config = tmp_path / "bad_project_baseline.yaml"
-    bad_config.write_text(
-        """
-baseline:
-  name: bad_project_baseline
-  family: retrieval
-  entrypoint: ultra_long_benchmark.cli:evaluate-project
-  requires_llm_api: false
-  requires_gpu: false
-  memory_backend: none
-data:
-  project_dir: examples/generated/projects/project_gharchive_001
-  output_path: examples/generated/evaluation_harness/bad.json
-evaluation:
-  mode: project_probe_text
-  baselines: [not_a_baseline]
-  metrics: [evidence_recall]
-resources:
-  partition: cpu
-  gpus: 0
-  cpus_per_task: 2
-  mem: 8G
-  time: "00:20:00"
-reproducibility:
-  seed: 0
-""",
-        encoding="utf-8",
-    )
-
-    report = validate_baseline_config(bad_config)
-
-    assert report["passed"] is False
-    assert any("unsupported project baselines" in issue for issue in report["issues"])
-
-
-def test_run_baseline_config_executes_raw_rag_project_config(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "raw_rag_project.yaml",
-        tmp_path / "raw_rag_project.yaml",
-        {
-            "project_dir": summary["project_dir"],
-            "output_path": str(tmp_path / "raw_rag_report.json"),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["probes"] == 3
-    result = read_json(tmp_path / "raw_rag_report.json")
-    assert result["project_id"] == "project_gharchive_001"
-    assert set(result["baselines"]) == {"raw_rag"}
-
-
-def test_run_baseline_config_executes_temporal_raw_rag_project_config(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "temporal_raw_rag_project.yaml",
-        tmp_path / "temporal_raw_rag_project.yaml",
-        {
-            "project_dir": summary["project_dir"],
-            "output_path": str(tmp_path / "temporal_raw_rag_report.json"),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    result = read_json(tmp_path / "temporal_raw_rag_report.json")
-    assert result["summary"]["baseline_names"] == ["temporal_raw_rag"]
-    assert set(result["baselines"]) == {"temporal_raw_rag"}
-
-
-def test_run_baseline_config_executes_action_trace_scoring_config(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "gharchive_action_trace_scoring.yaml",
-        tmp_path / "gharchive_action_trace_scoring.yaml",
-        {
-            "project_dir": summary["project_dir"],
-            "traces_path": str(ROOT / "examples" / "action_traces" / "gharchive_trace_examples.jsonl"),
-            "output_path": str(tmp_path / "trace_report.json"),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["traces"] == 2
-    assert runner_report["result_summary"]["boundary_violation_rate"] == 0.5
-
-
-def test_run_baseline_config_executes_prediction_submission_config(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "gharchive_prediction_submission_example.yaml",
-        tmp_path / "gharchive_prediction_submission_example.yaml",
-        {
-            "project_dir": summary["project_dir"],
-            "predictions_path": str(ROOT / "examples" / "project_predictions" / "gharchive_prediction_examples.jsonl"),
-            "output_path": str(tmp_path / "prediction_report.json"),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["predictions"] == 3
-    assert runner_report["result_summary"]["pass_rate"] < 1.0
-    assert read_json(tmp_path / "prediction_report.json")["system_name"] == "gharchive_prediction_submission_example"
-
-
-def test_run_baseline_config_generates_predictions_from_submission_inputs(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    release_dir = tmp_path / "release"
-    input_dir = tmp_path / "submission_inputs"
-    export_project_benchmark_release([Path(summary["project_dir"])], release_dir)
-    export_project_submission_inputs(release_dir, input_dir)
-    predictions_path = tmp_path / "submission_predictions.jsonl"
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "submission_input_raw_event_rag.yaml",
-        tmp_path / "submission_input_raw_event_rag.yaml",
-        {
-            "project_dir": str(release_dir),
-            "submission_input_dir": str(input_dir),
-            "predictions_path": str(predictions_path),
-            "output_path": str(tmp_path / "submission_runner_report.json"),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["predictions"] == 3
-    predictions = predictions_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(predictions) == 3
-    assert read_json(tmp_path / "submission_runner_report.json")["constraints"]["uses_gold_memory_graph"] is False
-
-
 def test_run_baseline_config_generates_memory_submission_predictions(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    release_dir = tmp_path / "release"
-    input_dir = tmp_path / "submission_inputs"
-    export_project_benchmark_release([Path(summary["project_dir"])], release_dir)
-    export_project_submission_inputs(release_dir, input_dir)
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path)
     predictions_path = tmp_path / "memory_submission_predictions.jsonl"
     config_path = _copy_config_with_data(
         ROOT / "configs" / "baselines" / "memory_submission_event_profile_stub.yaml",
@@ -286,83 +204,17 @@ def test_run_baseline_config_generates_memory_submission_predictions(tmp_path: P
     assert result["constraints"]["uses_gold_memory_graph"] is False
 
 
-def test_run_baseline_config_scores_release_prediction_directory(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    release_dir = tmp_path / "release"
-    export_project_benchmark_release([Path(summary["project_dir"])], release_dir)
-    submissions_dir = tmp_path / "release_submissions"
-    submissions_dir.mkdir()
-    predictions_path = submissions_dir / "oracle_like.jsonl"
-    project_dir = Path(summary["project_dir"])
-    project_id = read_json(project_dir / "project_profile.json")["project_id"]
-    rows = []
-    for probe in read_jsonl(project_dir / "probes.jsonl"):
-        rows.append(
-            {
-                "prediction_id": f"pred_{probe['probe_id']}",
-                "project_id": project_id,
-                "probe_id": probe["probe_id"],
-                "prediction": (
-                    " ".join(probe["expected_behavior"].get("must_include", []))
-                    + " do not "
-                    + " ".join(probe["expected_behavior"].get("must_not_include", []))
-                    + " "
-                    + " ".join(_positive_boundary_terms(project_dir, probe))
-                ),
-                "retrieved_memory_ids": probe["evidence"]["positive"],
-                "retrieved_event_ids": _positive_event_ids(project_dir, probe),
-                "retrieved_artifact_ids": [],
-            }
-        )
-    from ultra_long_benchmark.shared.io import write_jsonl
-
-    write_jsonl(predictions_path, rows)
-    output_path = tmp_path / "prediction_scoring_batch" / "prediction_scoring_batch_report.json"
+def test_run_baseline_config_generates_hardened_memory_submission_predictions(tmp_path: Path):
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path, hardened=True)
+    predictions_path = tmp_path / "memory_submission_hardened_predictions.jsonl"
     config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "project_release_prediction_dir.yaml",
-        tmp_path / "project_release_prediction_dir.yaml",
+        ROOT / "configs" / "baselines" / "memory_submission_event_profile_stub_hardened.yaml",
+        tmp_path / "memory_submission_event_profile_stub_hardened.yaml",
         {
             "project_dir": str(release_dir),
-            "predictions_dir": str(submissions_dir),
-            "output_path": str(output_path),
-        },
-    )
-
-    runner_report = run_baseline_config(config_path, tmp_path / "runner_report.json")
-
-    assert runner_report["status"] == "completed"
-    assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["systems"] == 1
-    assert read_json(output_path)["summary"]["systems"] == 1
-
-
-def test_run_baseline_config_validates_release_prediction_submission(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
-    release_dir = tmp_path / "release"
-    export_project_benchmark_release([Path(summary["project_dir"])], release_dir)
-    project_dir = Path(summary["project_dir"])
-    project_id = read_json(project_dir / "project_profile.json")["project_id"]
-    predictions_path = tmp_path / "release_predictions.jsonl"
-    write_jsonl(
-        predictions_path,
-        [
-            {
-                "prediction_id": f"pred_{probe['probe_id']}",
-                "project_id": project_id,
-                "probe_id": probe["probe_id"],
-                "prediction": "Follow the user's grounded policy and preserve action boundaries.",
-            }
-            for probe in read_jsonl(project_dir / "probes.jsonl")
-        ],
-    )
-    output_path = tmp_path / "prediction_submission_validation.json"
-    config_path = _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "project_release_prediction_validation.yaml",
-        tmp_path / "project_release_prediction_validation.yaml",
-        {
-            "project_dir": str(release_dir),
+            "submission_input_dir": str(input_dir),
             "predictions_path": str(predictions_path),
-            "output_path": str(output_path),
+            "output_path": str(tmp_path / "memory_submission_hardened_runner_report.json"),
         },
     )
 
@@ -370,13 +222,115 @@ def test_run_baseline_config_validates_release_prediction_submission(tmp_path: P
 
     assert runner_report["status"] == "completed"
     assert runner_report["executed"] is True
-    assert runner_report["result_summary"]["coverage"]["probe_coverage"] == 1.0
-    assert read_json(output_path)["passed"] is True
+    assert runner_report["result_summary"]["predictions"] == 3
+    assert read_json(input_dir / "submission_manifest.json")["query_hardening"]["enabled"] is True
+
+
+def test_run_baseline_config_external_memory_runner_requires_explicit_allow(tmp_path: Path):
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path, hardened=True)
+    predictions_path = tmp_path / "echo_predictions.jsonl"
+    config_path = tmp_path / "external_memory_runner_echo.yaml"
+    config_path.write_text(
+        f"""
+baseline:
+  name: external_memory_runner_echo
+  family: memory_system_contract
+  entrypoint: ultra_long_benchmark.cli:run-external-memory-submission-runner
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external_runner
+data:
+  project_dir: {release_dir}
+  submission_input_dir: {input_dir}
+  predictions_path: {predictions_path}
+  output_path: {tmp_path / "echo_runner_report.json"}
+evaluation:
+  mode: external_memory_submission_runner
+  runner: examples.external_memory_adapters.echo_policy_runner:run
+  runner_config:
+    max_events: 1
+  metrics:
+    - prediction_coverage
+    - no_gold_input_contract
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:05:00"
+reproducibility:
+  seed: 0
+""",
+        encoding="utf-8",
+    )
+
+    blocked = run_baseline_config(config_path, tmp_path / "blocked_runner_report.json")
+
+    assert blocked["status"] == "blocked_requires_external_runner"
+    assert blocked["executed"] is False
+    assert not predictions_path.exists()
+
+    completed = run_baseline_config(
+        config_path,
+        tmp_path / "completed_runner_report.json",
+        allow_external_runner=True,
+    )
+
+    assert completed["status"] == "completed"
+    assert completed["executed"] is True
+    assert completed["result_summary"]["predictions"] == 3
+    assert len(read_jsonl(predictions_path)) == 3
+    report = read_json(tmp_path / "echo_runner_report.json")
+    assert report["constraints"]["release_gold_supplied_to_runner"] is False
+    assert report["output_validation"]["passed"] is True
+
+
+def test_run_baseline_config_external_memory_runner_reports_bad_config_path(tmp_path: Path):
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path)
+    config_path = tmp_path / "external_memory_runner_bad_config.yaml"
+    config_path.write_text(
+        f"""
+baseline:
+  name: external_memory_runner_bad_config
+  family: memory_system_contract
+  entrypoint: ultra_long_benchmark.cli:run-external-memory-submission-runner
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: external_runner
+data:
+  project_dir: {release_dir}
+  submission_input_dir: {input_dir}
+  predictions_path: {tmp_path / "echo_predictions.jsonl"}
+  output_path: {tmp_path / "echo_runner_report.json"}
+  runner_config_path: {tmp_path / "missing_runner_config.json"}
+evaluation:
+  mode: external_memory_submission_runner
+  runner: examples.external_memory_adapters.echo_policy_runner:run
+  metrics:
+    - prediction_coverage
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:05:00"
+reproducibility:
+  seed: 0
+""",
+        encoding="utf-8",
+    )
+
+    report = run_baseline_config(config_path, tmp_path / "runner_report.json", allow_external_runner=True)
+
+    assert report["status"] == "invalid_runner_config"
+    assert report["executed"] is False
+    assert any("failed to load runner_config_path" in issue for issue in report["issues"])
+    assert not (tmp_path / "echo_predictions.jsonl").exists()
 
 
 def test_run_baseline_config_dry_runs_llm_api_placeholder_without_paths(tmp_path: Path):
     runner_report = run_baseline_config(
-        ROOT / "configs" / "baselines" / "mem0_project_placeholder.yaml",
+        ROOT / "configs" / "baselines" / "mem0_submission_placeholder.yaml",
         tmp_path / "mem0_dry_run.json",
         dry_run=True,
     )
@@ -386,32 +340,38 @@ def test_run_baseline_config_dry_runs_llm_api_placeholder_without_paths(tmp_path
     assert not runner_report["issues"]
 
 
-def test_run_baseline_config_dir_executes_offline_and_dry_runs_external_configs(tmp_path: Path):
-    summary = run_gharchive_pilot(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+def test_run_baseline_config_dir_executes_local_stub_and_dry_runs_external_configs(tmp_path: Path):
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path)
+    _, hardened_input_dir = _tiny_release_and_inputs(tmp_path / "hardened", hardened=True)
     config_dir = tmp_path / "configs"
     config_dir.mkdir()
     _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "raw_rag_project.yaml",
-        config_dir / "raw_rag_project.yaml",
+        ROOT / "configs" / "baselines" / "memory_submission_event_profile_stub.yaml",
+        config_dir / "memory_submission_event_profile_stub.yaml",
         {
-            "project_dir": summary["project_dir"],
-            "output_path": str(tmp_path / "raw_rag_report.json"),
+            "project_dir": str(release_dir),
+            "submission_input_dir": str(input_dir),
+            "predictions_path": str(tmp_path / "memory_stub_predictions.jsonl"),
+            "output_path": str(tmp_path / "memory_stub_report.json"),
         },
     )
     _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "gharchive_action_trace_scoring.yaml",
-        config_dir / "gharchive_action_trace_scoring.yaml",
+        ROOT / "configs" / "baselines" / "external_memory_runner_echo_contract.yaml",
+        config_dir / "external_memory_runner_echo_contract.yaml",
         {
-            "project_dir": summary["project_dir"],
-            "traces_path": str(ROOT / "examples" / "action_traces" / "gharchive_trace_examples.jsonl"),
-            "output_path": str(tmp_path / "trace_report.json"),
+            "project_dir": str(release_dir),
+            "submission_input_dir": str(hardened_input_dir),
+            "predictions_path": str(tmp_path / "echo_predictions.jsonl"),
+            "output_path": str(tmp_path / "echo_report.json"),
         },
     )
     _copy_config_with_data(
-        ROOT / "configs" / "baselines" / "mem0_project_placeholder.yaml",
-        config_dir / "mem0_project_placeholder.yaml",
+        ROOT / "configs" / "baselines" / "mem0_submission_placeholder.yaml",
+        config_dir / "mem0_submission_placeholder.yaml",
         {
-            "project_dir": summary["project_dir"],
+            "project_dir": str(release_dir),
+            "submission_input_dir": str(hardened_input_dir),
+            "predictions_path": str(tmp_path / "mem0_predictions.jsonl"),
             "output_path": str(tmp_path / "mem0_report.json"),
         },
     )
@@ -420,10 +380,66 @@ def test_run_baseline_config_dir_executes_offline_and_dry_runs_external_configs(
 
     assert report["passed"] is True
     assert report["summary"]["configs_total"] == 3
-    assert report["summary"]["completed"] == 2
-    assert report["summary"]["dry_run"] == 1
+    assert report["summary"]["completed"] == 1
+    assert report["summary"]["dry_run"] == 2
     assert report["summary"]["blocked"] == 0
-    assert read_json(tmp_path / "batch_reports" / "baseline_batch_report.json")["summary"]["completed"] == 2
+    assert report["summary"]["runner_reports_hashed"] == 3
+    assert report["summary"]["output_artifacts_hashed"] == 1
+    assert all(item.get("runner_report_sha256") and item.get("runner_report_bytes") for item in report["reports"])
+    assert all(item.get("output_artifact", {}).get("sha256") for item in report["reports"] if item["executed"])
+    assert read_json(tmp_path / "batch_reports" / "baseline_batch_report.json")["summary"]["completed"] == 1
+
+
+def test_baseline_batch_verifier_passes_for_unchanged_runner_reports_and_outputs(tmp_path: Path):
+    config_dir = _single_executable_config_dir(tmp_path)
+    batch_dir = tmp_path / "batch_reports"
+    run_baseline_config_dir(config_dir, batch_dir)
+
+    verification = verify_baseline_batch_report(batch_dir / "baseline_batch_report.json")
+
+    assert verification["passed"] is True
+    assert verification["summary"]["reports_total"] == 1
+    assert verification["summary"]["runner_reports_verified"] == 1
+    assert verification["summary"]["output_artifacts_verified"] == 1
+
+
+def test_baseline_batch_verifier_fails_when_runner_report_changes(tmp_path: Path):
+    config_dir = _single_executable_config_dir(tmp_path)
+    batch_dir = tmp_path / "batch_reports"
+    batch = run_baseline_config_dir(config_dir, batch_dir)
+    runner_report_path = Path(batch["reports"][0]["runner_report_path"])
+    runner_report = read_json(runner_report_path)
+    runner_report["status"] = "changed_after_batch"
+    write_json(runner_report_path, runner_report)
+
+    verification = verify_baseline_batch_report(batch_dir / "baseline_batch_report.json")
+
+    assert verification["passed"] is False
+    assert "baseline_batch_runner_report_sha256_mismatch" in verification["summary"]["issue_codes"]
+
+
+def test_baseline_batch_verifier_fails_when_output_artifact_changes(tmp_path: Path):
+    config_dir = _single_executable_config_dir(tmp_path)
+    batch_dir = tmp_path / "batch_reports"
+    batch = run_baseline_config_dir(config_dir, batch_dir)
+    output_path = Path(batch["reports"][0]["output_path"])
+    output = read_json(output_path)
+    output["changed_after_batch"] = True
+    write_json(output_path, output)
+
+    verification = verify_baseline_batch_report(batch_dir / "baseline_batch_report.json")
+
+    assert verification["passed"] is False
+    assert "baseline_batch_output_artifact_sha256_mismatch" in verification["summary"]["issue_codes"]
+
+
+def _tiny_release_and_inputs(tmp_path: Path, *, hardened: bool = False) -> tuple[Path, Path]:
+    summary = build_gharchive_project_fixture(tmp_path / "projects", input_path=DEFAULT_GHARCHIVE_FIXTURE_PATH, repo_full_name="acme/docs")
+    release_dir = tmp_path / "release"
+    input_dir = tmp_path / ("submission_inputs_hardened" if hardened else "submission_inputs")
+    export_project_benchmark_release([Path(summary["project_dir"])], release_dir)
+    export_project_submission_inputs(release_dir, input_dir, harden_probe_queries=hardened)
+    return release_dir, input_dir
 
 
 def _copy_config_with_data(source_path: Path, target_path: Path, data_updates: dict[str, str]) -> Path:
@@ -433,21 +449,50 @@ def _copy_config_with_data(source_path: Path, target_path: Path, data_updates: d
     return target_path
 
 
-def _positive_event_ids(project_dir: Path, probe: dict) -> list[str]:
-    graph = read_json(project_dir / "memory_graph.json")
-    memory_by_id = {memory["memory_id"]: memory for memory in graph["memories"]}
-    event_ids = []
-    for memory_id in probe["evidence"]["positive"]:
-        event_ids.extend(memory_by_id[memory_id]["source_events"])
-    return sorted(set(event_ids))
+def _single_executable_config_dir(tmp_path: Path) -> Path:
+    release_dir, input_dir = _tiny_release_and_inputs(tmp_path)
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    _copy_config_with_data(
+        ROOT / "configs" / "baselines" / "memory_submission_event_profile_stub.yaml",
+        config_dir / "memory_submission_event_profile_stub.yaml",
+        {
+            "project_dir": str(release_dir),
+            "submission_input_dir": str(input_dir),
+            "predictions_path": str(tmp_path / "memory_stub_predictions.jsonl"),
+            "output_path": str(tmp_path / "memory_stub_report.json"),
+        },
+    )
+    return config_dir
 
 
-def _positive_boundary_terms(project_dir: Path, probe: dict) -> list[str]:
-    graph = read_json(project_dir / "memory_graph.json")
-    memory_by_id = {memory["memory_id"]: memory for memory in graph["memories"]}
-    terms = []
-    for memory_id in probe["evidence"]["positive"]:
-        boundary = memory_by_id[memory_id].get("action_boundary") or {}
-        for key in ["allowed_actions", "forbidden_actions", "requires_approval", "requires_clarification", "authorized_tools", "forbidden_tools"]:
-            terms.extend(str(value).replace("_", " ") for value in boundary.get(key, []))
-    return terms
+def _write_minimal_baseline_config(path: Path, name: str) -> None:
+    path.write_text(
+        f"""
+baseline:
+  name: {name}
+  family: memory_system_contract
+  entrypoint: ultra_long_benchmark.cli:run-memory-submission-baseline
+  requires_llm_api: false
+  requires_gpu: false
+  memory_backend: event_profile_stub
+data:
+  project_dir: examples/generated/release_packaging/gharchive_formal_project_benchmark
+  submission_input_dir: examples/generated/evaluation_harness/gharchive_formal_submission_inputs_hardened
+  predictions_path: examples/generated/evaluation_harness/{name}_predictions.jsonl
+  output_path: examples/generated/evaluation_harness/{name}.json
+evaluation:
+  mode: memory_submission_prediction_generation
+  adapter: event_profile_stub
+  metrics: [prediction_coverage]
+resources:
+  partition: cpu
+  gpus: 0
+  cpus_per_task: 1
+  mem: 4G
+  time: "00:05:00"
+reproducibility:
+  seed: 0
+""",
+        encoding="utf-8",
+    )

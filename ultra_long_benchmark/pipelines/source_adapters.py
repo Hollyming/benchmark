@@ -9,7 +9,7 @@ from typing import Iterable
 from ultra_long_benchmark.models import CanonicalEvent, ProjectProfile, SourceArtifact, Validity
 from ultra_long_benchmark.shared.privacy import privacy_tags, redact
 from ultra_long_benchmark.shared.provenance import content_hash
-from ultra_long_benchmark.shared.io import read_json
+from ultra_long_benchmark.shared.io import read_json, write_json
 
 
 @dataclass(frozen=True)
@@ -26,65 +26,6 @@ class AdapterResult:
     artifacts: list[SourceArtifact]
     events: list[CanonicalEvent]
     seed_path: Path | None = None
-
-
-class GitHubIssueCIAdapter:
-    """Offline fixture adapter shaped like a GitHub issue/CI dataset adapter.
-
-    This adapter reads checked-in fixture records that mimic GitHub issues,
-    CI logs, patch diffs, and review comments. It deliberately avoids network
-    access while exercising the same normalization contract a future real
-    GitHub/SWE-bench adapter should implement.
-    """
-
-    def __init__(self, fixture_path: Path):
-        self.fixture_path = Path(fixture_path)
-
-    def load(self) -> AdapterResult:
-        fixture = read_json(self.fixture_path)
-        profile = ProjectProfile(**fixture["project_profile"])
-        event_id_map = fixture.get("event_id_map", {})
-        artifacts: list[SourceArtifact] = []
-        events: list[CanonicalEvent] = []
-        for record in fixture["raw_records"]:
-            artifact_id = f"artifact_{record['record_id']}"
-            artifacts.append(
-                SourceArtifact(
-                    artifact_id=artifact_id,
-                    source_dataset=record["source_dataset"],
-                    artifact_type=record["artifact_type"],
-                    uri=record.get("uri"),
-                    license=record.get("license"),
-                    content_hash=record.get("content_hash") or f"fixture_hash_{record['record_id']}",
-                    raw_pointer=record["raw_pointer"],
-                    content=record["content"],
-                    metadata={"record_id": record["record_id"], "fixture_path": str(self.fixture_path)},
-                )
-            )
-            event_id = event_id_map.get(record["record_id"], f"event_{record['record_id']}")
-            validity = record.get("validity")
-            events.append(
-                CanonicalEvent(
-                    event_id=event_id,
-                    project_id=profile.project_id,
-                    timestamp=record["timestamp"],
-                    source_dataset=record["source_dataset"],
-                    actor=record["actor"],
-                    event_type=record["event_type"],
-                    content=record["content"],
-                    artifacts=[artifact_id],
-                    raw_pointer=record["raw_pointer"],
-                    project_tags=record.get("project_tags", []),
-                    entities=record.get("entities", []),
-                    claims=record.get("claims", []),
-                    causal_links=record.get("causal_links", []),
-                    supersedes=record.get("supersedes", []),
-                    invalidates=record.get("invalidates", []),
-                    validity=Validity(**validity) if validity else None,
-                    metadata={"record_id": record["record_id"], "artifact_type": record["artifact_type"]},
-                )
-            )
-        return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=self.fixture_path)
 
 
 class GHArchiveEventAdapter:
@@ -348,32 +289,263 @@ class EmailWorkflowAdapter:
             raise ValueError(f"email workflow record {index} missing required fields: {missing}")
 
 
-class ManualSeedAdapter:
-    """Offline adapter for the checked-in manual grounded seed JSON.
+class WorkflowManifestAdapter:
+    """Manifest-first adapter for non-email workflow traces.
 
-    The adapter intentionally performs no network access. It exists as the
-    smallest reference implementation of the adapter contract that real dataset
-    adapters can mirror: read raw/source records, normalize them into
-    SourceArtifact objects, and emit CanonicalEvent records bound to a project.
+    This is the safe staging contract for future calendar/docs/chat/browser
+    domains. It normalizes already-reviewed records without granting release
+    readiness; downstream verifiers and release gates still need to be added per
+    domain before any paper claim can include the domain.
     """
 
-    def __init__(self, seed_path: Path):
-        self.seed_path = Path(seed_path)
+    ALLOWED_DOMAINS = {"calendar_workflow", "docs_workflow", "chat_workflow", "browser_web_workflow"}
+    DEFAULT_STREAMS = {
+        "calendar_workflow": ["calendar"],
+        "docs_workflow": ["docs"],
+        "chat_workflow": ["chat"],
+        "browser_web_workflow": ["browser", "web_search"],
+    }
+    DEFAULT_PHASES = {
+        "calendar_workflow": ["availability", "scheduling", "rescheduling", "follow_up"],
+        "docs_workflow": ["draft", "review", "approval", "share"],
+        "chat_workflow": ["triage", "escalation", "response", "handoff"],
+        "browser_web_workflow": ["search", "compare", "select", "act"],
+    }
+    DEFAULT_GOALS = {
+        "calendar_workflow": "Induce calendar scheduling habits, availability boundaries, approval rules, and rescheduling policies.",
+        "docs_workflow": "Induce document review, sharing, approval, and privacy workflow policies.",
+        "chat_workflow": "Induce chat escalation, response-channel, notification, and privacy workflow policies.",
+        "browser_web_workflow": "Induce browser/web-search decision policies, authorization boundaries, and action constraints.",
+    }
+
+    REQUIRED_MANIFEST_FIELDS = {
+        "dataset_name",
+        "domain",
+        "source_dataset",
+        "license",
+        "redistribution",
+        "privacy_review",
+        "project_id",
+        "records",
+    }
+
+    def __init__(self, manifest_path: Path, redact_sensitive: bool = True):
+        self.manifest_path = Path(manifest_path)
+        self.redact_sensitive = redact_sensitive
 
     def load(self) -> AdapterResult:
-        seed = read_json(self.seed_path)
-        profile = ProjectProfile(**seed["project_profile"])
-        artifacts = [SourceArtifact(**artifact) for artifact in seed["artifacts"]]
-        events = [self._event_from_seed(spec, profile.project_id) for spec in seed["event_specs"]]
-        return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=self.seed_path)
+        manifest = read_json(self.manifest_path)
+        self._validate_manifest(manifest)
+        domain = str(manifest["domain"])
+        source_dataset = str(manifest["source_dataset"])
+        dataset_name = str(manifest["dataset_name"])
+        license_name = str(manifest["license"])
+        streams = list(manifest.get("source_streams") or self.DEFAULT_STREAMS[domain])
+        profile = ProjectProfile(
+            project_id=manifest["project_id"],
+            title=manifest.get("title") or f"{domain} trace: {dataset_name}",
+            project_goal=manifest.get("project_goal") or self.DEFAULT_GOALS[domain],
+            user_profile={
+                "source": source_dataset,
+                "dataset_name": dataset_name,
+                "domain": domain,
+                "privacy_review": manifest["privacy_review"],
+                "redistribution": manifest["redistribution"],
+            },
+            roles=manifest.get("roles", {}),
+            phases=manifest.get("phases", self.DEFAULT_PHASES[domain]),
+            source_streams=streams,
+            synthetic_context=bool(manifest.get("synthetic_context", False)),
+            metadata={
+                "manifest_path": str(self.manifest_path),
+                "domain": domain,
+                "license": license_name,
+                "license_url": manifest.get("license_url"),
+                "privacy_review": manifest["privacy_review"],
+                "redistribution": manifest["redistribution"],
+            },
+        )
+        artifacts: list[SourceArtifact] = []
+        events: list[CanonicalEvent] = []
+        for index, record in enumerate(manifest["records"], start=1):
+            self._validate_record(record, index)
+            record_id = str(record["record_id"])
+            raw_content = _format_workflow_record_content(record)
+            tags = sorted(set(privacy_tags(raw_content) + record.get("privacy_tags", [])))
+            content = redact(raw_content) if self.redact_sensitive else raw_content
+            artifact_id = record.get("artifact_id") or f"artifact_{_domain_prefix(domain)}_{_safe_id(record_id)}"
+            event_id = record.get("event_id") or f"event_{_domain_prefix(domain)}_{_safe_id(record_id)}"
+            raw_pointer = record.get("raw_pointer") or f"{self.manifest_path}#records/{index}"
+            artifacts.append(
+                SourceArtifact(
+                    artifact_id=artifact_id,
+                    source_dataset=source_dataset,
+                    artifact_type=record.get("artifact_type", _domain_prefix(domain) + "_record"),
+                    uri=record.get("uri"),
+                    license=license_name,
+                    content_hash=content_hash(raw_content),
+                    raw_pointer=raw_pointer,
+                    content=content,
+                    metadata={
+                        "record_id": record_id,
+                        "domain": domain,
+                        "privacy_tags": tags,
+                        "redacted": self.redact_sensitive,
+                        "manifest_path": str(self.manifest_path),
+                    }
+                    | dict(record.get("artifact_metadata", {})),
+                )
+            )
+            validity = record.get("validity")
+            events.append(
+                CanonicalEvent(
+                    event_id=event_id,
+                    project_id=profile.project_id,
+                    timestamp=record["timestamp"],
+                    source_dataset=source_dataset,
+                    actor=_redact_metadata_value(record.get("actor") or "unknown_workflow_actor", self.redact_sensitive),
+                    event_type=record.get("event_type", _domain_prefix(domain) + "_event"),
+                    content=content,
+                    artifacts=[artifact_id],
+                    raw_pointer=raw_pointer,
+                    project_tags=sorted(set([domain, _domain_prefix(domain), "workflow"] + record.get("project_tags", []))),
+                    entities=[_redact_metadata_value(entity, self.redact_sensitive) for entity in record.get("entities", [])],
+                    claims=record.get("claims", []),
+                    causal_links=record.get("causal_links", []),
+                    supersedes=record.get("supersedes", []),
+                    invalidates=record.get("invalidates", []),
+                    validity=Validity(**validity) if validity else None,
+                    metadata={
+                        "record_id": record_id,
+                        "domain": domain,
+                        "privacy_tags": tags,
+                        "redacted": self.redact_sensitive,
+                    }
+                    | dict(record.get("event_metadata", {})),
+                )
+            )
+        return AdapterResult(project_profile=profile, artifacts=artifacts, events=events, seed_path=self.manifest_path)
+
+    @classmethod
+    def _validate_manifest(cls, manifest: dict) -> None:
+        missing = sorted(cls.REQUIRED_MANIFEST_FIELDS - manifest.keys())
+        if missing:
+            raise ValueError(f"workflow manifest missing required fields: {missing}")
+        domain = manifest.get("domain")
+        if domain not in cls.ALLOWED_DOMAINS:
+            raise ValueError(f"workflow manifest domain must be one of {sorted(cls.ALLOWED_DOMAINS)}")
+        if not manifest.get("license") or str(manifest.get("license")).lower() in {"unknown", "n/a", "none"}:
+            raise ValueError("workflow manifest requires a known license")
+        redistribution = manifest.get("redistribution", {})
+        if not isinstance(redistribution, dict) or redistribution.get("allowed") is not True:
+            raise ValueError("workflow manifest requires redistribution.allowed=true")
+        privacy_review = manifest.get("privacy_review", {})
+        if not isinstance(privacy_review, dict) or privacy_review.get("status") != "passed":
+            raise ValueError("workflow manifest requires privacy_review.status='passed'")
+        if privacy_review.get("pii_redaction") is not True:
+            raise ValueError("workflow manifest requires privacy_review.pii_redaction=true")
+        if not isinstance(manifest.get("records"), list):
+            raise ValueError("workflow manifest records must be a list")
 
     @staticmethod
-    def _event_from_seed(spec: dict, project_id: str) -> CanonicalEvent:
-        data = dict(spec)
-        data["project_id"] = project_id
-        if data.get("validity") is not None:
-            data["validity"] = Validity(**data["validity"])
-        return CanonicalEvent(**data)
+    def _validate_record(record: dict, index: int) -> None:
+        required = {"record_id", "timestamp", "content"}
+        missing = sorted(required - record.keys())
+        if missing:
+            raise ValueError(f"workflow manifest record {index} missing required fields: {missing}")
+
+
+def validate_workflow_manifest_adapter(
+    manifest_path: Path,
+    output_path: Path | None = None,
+    *,
+    adapter: str = "auto",
+    redact_sensitive: bool = True,
+) -> dict:
+    """Validate a manifest-first workflow adapter without exporting raw content."""
+
+    manifest_path = Path(manifest_path)
+    manifest = read_json(manifest_path)
+    selected_adapter = _select_manifest_adapter(manifest, adapter)
+    if selected_adapter == "email":
+        result = EmailWorkflowAdapter(manifest_path, redact_sensitive=redact_sensitive).load()
+        domain = "email_workflow"
+    elif selected_adapter == "workflow":
+        result = WorkflowManifestAdapter(manifest_path, redact_sensitive=redact_sensitive).load()
+        domain = result.project_profile.metadata.get("domain") or manifest.get("domain")
+    else:
+        raise ValueError("adapter must be one of: auto, email, workflow")
+
+    artifact_ids = {artifact.artifact_id for artifact in result.artifacts}
+    event_artifact_ids = {artifact_id for event in result.events for artifact_id in event.artifacts}
+    issues: list[dict[str, str]] = []
+    if event_artifact_ids - artifact_ids:
+        issues.append({"code": "unknown_event_artifact", "message": "events reference artifacts missing from adapter output"})
+    if {event.project_id for event in result.events} - {result.project_profile.project_id}:
+        issues.append({"code": "project_id_mismatch", "message": "events are not all bound to the adapter project profile"})
+
+    privacy_tag_counts: dict[str, int] = {}
+    for artifact in result.artifacts:
+        metadata = artifact.metadata if isinstance(artifact.metadata, dict) else {}
+        for tag in metadata.get("privacy_tags", []):
+            privacy_tag_counts[str(tag)] = privacy_tag_counts.get(str(tag), 0) + 1
+    for event in result.events:
+        metadata = event.metadata if isinstance(event.metadata, dict) else {}
+        for tag in metadata.get("privacy_tags", []):
+            privacy_tag_counts[str(tag)] = privacy_tag_counts.get(str(tag), 0) + 1
+
+    report = {
+        "passed": not issues,
+        "manifest_path": str(manifest_path),
+        "adapter": selected_adapter,
+        "domain": domain,
+        "project_id": result.project_profile.project_id,
+        "root": str(Path.cwd()),
+        "summary": {
+            "records": len(manifest.get("records", [])) if isinstance(manifest.get("records"), list) else 0,
+            "artifacts": len(result.artifacts),
+            "events": len(result.events),
+            "issues": len(issues),
+            "privacy_tag_counts": dict(sorted(privacy_tag_counts.items())),
+            "redacted": redact_sensitive,
+        },
+        "manifest": {
+            "bytes": manifest_path.stat().st_size,
+            "sha256": _file_sha256(manifest_path),
+            "dataset_name": manifest.get("dataset_name"),
+            "source_dataset": manifest.get("source_dataset"),
+            "license": manifest.get("license"),
+            "license_url": manifest.get("license_url"),
+            "redistribution": manifest.get("redistribution", {}),
+            "privacy_review": manifest.get("privacy_review", {}),
+        },
+        "project_profile": {
+            "title": result.project_profile.title,
+            "source_streams": result.project_profile.source_streams,
+            "phases": result.project_profile.phases,
+            "synthetic_context": result.project_profile.synthetic_context,
+        },
+        "constraints": {
+            "raw_content_exported": False,
+            "llm_generation_performed": False,
+            "network_access_required": False,
+            "release_ready_claim": False,
+            "requires_downstream_domain_verifier": True,
+        },
+        "issues": issues,
+    }
+    if output_path is not None:
+        write_json(output_path, report)
+    return report
+
+
+def _select_manifest_adapter(manifest: dict, adapter: str) -> str:
+    if adapter != "auto":
+        return adapter
+    domain = manifest.get("domain")
+    if domain in WorkflowManifestAdapter.ALLOWED_DOMAINS:
+        return "workflow"
+    return "email"
 
 
 def iter_gharchive_json_records(path: Path) -> Iterable[dict]:
@@ -436,6 +608,34 @@ def _format_email_record_content(record: dict) -> str:
         fields.append("To: " + ", ".join(str(recipient) for recipient in recipients))
     fields.append(str(record["content"]))
     return "\n".join(fields)
+
+
+def _format_workflow_record_content(record: dict) -> str:
+    fields = []
+    if record.get("title"):
+        fields.append(f"Title: {record['title']}")
+    if record.get("actor"):
+        fields.append(f"Actor: {record['actor']}")
+    if record.get("tool"):
+        fields.append(f"Tool: {record['tool']}")
+    if record.get("action"):
+        fields.append(f"Action: {record['action']}")
+    fields.append(str(record["content"]))
+    return "\n".join(fields)
+
+
+def _domain_prefix(domain: str) -> str:
+    return domain.removesuffix("_workflow")
+
+
+def _file_sha256(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _redact_metadata_value(value: object, enabled: bool) -> object:
